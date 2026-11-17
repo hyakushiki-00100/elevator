@@ -2,11 +2,14 @@ import type { Building } from './building.ts';
 import { createElevator, stepElevator, type Elevator, type SimEvent } from './elevator.ts';
 import { makePassenger, type Kind, type Passenger, type Stats } from './passenger.ts';
 import { Rng } from './rng.ts';
+import { CARD_ORDER, isCardId, type CardId } from './rules.ts';
 import { dayTicks, maybeSpawn, phaseAt, validatePlan, type DayPlan } from './traffic.ts';
 
 export interface SimConfig {
   building: Building;
   traffic: DayPlan;
+  /** エレベーターごとのルールの枠(上から順に評価)。省略すると全基が手動のみ */
+  rules?: readonly (readonly CardId[])[];
 }
 
 export interface SimState {
@@ -46,9 +49,13 @@ export function validateBuilding(b: Building): void {
 export function createSim(config: SimConfig, seed: number): SimState {
   validateBuilding(config.building);
   validatePlan(config.traffic);
+  const rules = config.rules ?? [];
+  if (rules.length > config.building.elevators || !rules.every((r) => r.every(isCardId))) {
+    throw new Error(`invalid rules: ${JSON.stringify(rules)}`);
+  }
   const elevators: Elevator[] = [];
   for (let i = 0; i < config.building.elevators; i++) {
-    elevators.push(createElevator(i, config.building.floors));
+    elevators.push(createElevator(i, config.building.floors, rules[i] ?? []));
   }
   return {
     config,
@@ -152,6 +159,8 @@ export function stateHash(s: SimState): number {
     mix(e.pos); mix(e.dir); mix(e.heading); mix(e.timer); mix(e.target);
     mix(e.phase === 'idle' ? 0 : e.phase === 'moving' ? 1 : 2);
     mix(e.manualTarget ?? -1);
+    mix(e.ruleIndex);
+    mix(e.tripCard === null ? -1 : CARD_ORDER.indexOf(e.tripCard));
     for (const x of e.stops) mix(x ? 1 : 0);
   }
   const st = s.stats;

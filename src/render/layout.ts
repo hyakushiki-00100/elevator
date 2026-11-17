@@ -103,3 +103,49 @@ export function makeView(cssW: number, cssH: number): View {
 export function toLogical(v: View, px: number, py: number): { x: number; y: number } {
   return { x: (px - v.offsetX) / v.scale, y: (py - v.offsetY) / v.scale };
 }
+
+// ---- ルールのカードの編集画面(1日の開始前) ----
+export const EDITOR_PANEL: Rect = { x: 230, y: 40, w: 500, h: 460 };
+export const CARD_W = 64;
+export const CARD_H = 84;
+const CARD_GAP = 16;
+const SLOTS_Y = 84;
+const ROW_H = 104;
+const HAND_GAP = 34;
+export const EDITOR_PLAY: Rect = { x: 480 - 38, y: 418, w: 76, h: 76 };
+
+function rowStartX(n: number): number {
+  return 480 - (n * CARD_W + (n - 1) * CARD_GAP) / 2;
+}
+
+/** エレベーター row の i 番目の枠 */
+export function slotRect(row: number, i: number, slotCount: number): Rect {
+  return { x: rowStartX(slotCount) + i * (CARD_W + CARD_GAP), y: SLOTS_Y + row * ROW_H, w: CARD_W, h: CARD_H };
+}
+
+/** 手持ちのカードの i 番目(枠の行の下に並べる) */
+export function handRect(i: number, handCount: number, rows: number): Rect {
+  return { x: rowStartX(handCount) + i * (CARD_W + CARD_GAP), y: SLOTS_Y + rows * ROW_H + HAND_GAP, w: CARD_W, h: CARD_H };
+}
+
+/** 2基以上のとき、行の左に置くエレベーターの選択ボタン */
+export function rowButtonRect(row: number, slotCount: number): Rect {
+  return { x: rowStartX(slotCount) - 56, y: SLOTS_Y + row * ROW_H + 18, w: 40, h: 48 };
+}
+
+export type EditorHit =
+  | { kind: 'slot'; row: number; index: number }
+  | { kind: 'hand'; index: number }
+  | { kind: 'row'; row: number }
+  | { kind: 'play' }
+  | null;
+
+export function editorHit(x: number, y: number, rows: number, slotCount: number, handCount: number): EditorHit {
+  if (inRect(EDITOR_PLAY, x, y)) return { kind: 'play' };
+  for (let r = 0; r < rows; r++) {
+    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i, slotCount), x, y)) return { kind: 'slot', row: r, index: i };
+    if (rows > 1 && inRect(rowButtonRect(r, slotCount), x, y)) return { kind: 'row', row: r };
+  }
+  for (let i = 0; i < handCount; i++) if (inRect(handRect(i, handCount, rows), x, y)) return { kind: 'hand', index: i };
+  return null;
+}

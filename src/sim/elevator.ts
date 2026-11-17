@@ -1,6 +1,7 @@
 import { UNITS_PER_FLOOR as U, type Building } from './building.ts';
 import type { Passenger, Stats } from './passenger.ts';
 import { deliveryPoints } from './score.ts';
+import { evaluateRules, makeContext, type CardId } from './rules.ts';
 
 /** 描画の演出用に sim が出す出来事。採点や状態には使わない */
 export type SimEvent =
@@ -27,6 +28,12 @@ export interface Elevator {
   manualTarget: number | null;
   /** 乗客が押した行き先ボタン(階ごと) */
   stops: boolean[];
+  /** 運行ルールの枠(上から順に評価する)。1日の間は変わらない */
+  rules: readonly CardId[];
+  /** 今の動きを決めたもの: 0以上=その枠のカード / -1=手動 / -2=乗っている人の行き先 / -3=なし(表示用) */
+  ruleIndex: number;
+  /** 今の移動を選んだカード(移動中に途中の階へ止まるかどうかに使う) */
+  tripCard: CardId | null;
 }
 
 /** エレベーターが見る世界(sim.ts の SimState の一部) */
@@ -39,7 +46,7 @@ export interface World {
   events: SimEvent[];
 }
 
-export function createElevator(id: number, floors: number, startFloor = 0): Elevator {
+export function createElevator(id: number, floors: number, rules: readonly CardId[] = [], startFloor = 0): Elevator {
   return {
     id,
     pos: startFloor * U,
@@ -50,6 +57,9 @@ export function createElevator(id: number, floors: number, startFloor = 0): Elev
     target: startFloor,
     manualTarget: null,
     stops: new Array<boolean>(floors).fill(false),
+    rules: [...rules],
+    ruleIndex: -3,
+    tripCard: null,
   };
 }
 
@@ -73,8 +83,18 @@ function nearestStop(e: Elevator, cur: number, floors: number): number | null {
   return null;
 }
 
-/** 扉が閉まった(または待機中)ときに、次にどうするかを決める */
-function decide(e: Elevator, w: World): void {
+function openDoors(e: Elevator, w: World): void {
+  e.phase = 'open';
+  e.timer = w.building.doorTicks;
+  e.dir = 0;
+}
+
+/**
+ * 扉が閉まった(または待機中)ときに、次にどうするかを決める。
+ * 優先順: 手動の指示 → ルールのカード(上の枠から) → 乗っている人の行き先 → 待機
+ * idle: 待機中からの判断なら true(今いる階で乗れる人がいれば扉を開ける)
+ */
+function decide(e: Elevator, w: World, idle: boolean): void {
   const floors = w.building.floors;
   const cur = e.pos / U;
   let target: number | null = null;
@@ -82,14 +102,32 @@ function decide(e: Elevator, w: World): void {
     if (e.manualTarget === cur) {
       // 今いる階が指示された: 扉を開けて乗り降りさせる
       e.manualTarget = null;
-      e.phase = 'open';
-      e.timer = w.building.doorTicks;
-      e.dir = 0;
+      e.ruleIndex = -1;
+      e.tripCard = null;
+      openDoors(e, w);
       return;
     }
     target = e.manualTarget;
+    e.ruleIndex = -1;
+    e.tripCard = null;
   }
-  if (target === null) target = nearestStop(e, cur, floors);
+  if (target === null && e.rules.length > 0) {
+    const r = evaluateRules(e, makeContext(e, w, idle, loadOf(e, w)));
+    if (r !== null) {
+      e.ruleIndex = r.index;
+      e.tripCard = e.rules[r.index]!;
+      if (r.target === cur) {
+        openDoors(e, w);
+        return;
+      }
+      target = r.target;
+    }
+  }
+  if (target === null) {
+    target = nearestStop(e, cur, floors);
+    e.ruleIndex = target === null ? -3 : -2;
+    e.tripCard = null;
+  }
   if (target === null) {
     e.phase = 'idle';
     e.dir = 0;
@@ -99,6 +137,30 @@ function decide(e: Elevator, w: World): void {
   e.dir = target > cur ? 1 : -1;
   e.heading = e.dir;
   e.phase = 'moving';
+}
+
+/**
+ * 移動中、目的階より手前で止まるべき階(手動の指示で動いているときは止まらない)。
+ * 乗っている人の降りる階には必ず止まる。「同じ方向を優先」で選んだ移動なら、待っている人の階にも止まる。
+ */
+function enRouteStop(e: Elevator, w: World): number | null {
+  if (e.manualTarget !== null || e.dir === 0) return null;
+  const hallToo = e.tripCard === 'sameDir';
+  let hall: boolean[] | null = null;
+  if (hallToo) {
+    const load = loadOf(e, w);
+    hall = new Array<boolean>(w.building.floors).fill(false);
+    for (const p of w.passengers) {
+      if (p.state === 'waiting' && load + p.size <= w.building.capacity) hall[p.origin] = true;
+    }
+  }
+  // 進行方向で、まだ通り過ぎていない最初の階から目的階の手前まで
+  const first = e.dir > 0 ? Math.floor(e.pos / U) + 1 : Math.ceil(e.pos / U) - 1;
+  for (let f = first; f !== e.target; f += e.dir) {
+    if (f < 0 || f >= w.building.floors) break;
+    if (e.stops[f] || (hall !== null && hall[f])) return f;
+  }
+  return null;
 }
 
 /** 扉が開いている間の乗り降り。毎tick呼ぶ(同じ階では二重に処理されない) */
@@ -149,11 +211,18 @@ export function stepElevator(e: Elevator, w: World): void {
   const b = w.building;
   switch (e.phase) {
     case 'idle':
-      decide(e, w);
+      decide(e, w, true);
       break;
     case 'moving': {
       // 手動指示は移動中でも割り込める(途中での方向転換を許す: 簡略化)
-      if (e.manualTarget !== null) e.target = e.manualTarget;
+      if (e.manualTarget !== null) {
+        e.target = e.manualTarget;
+        e.ruleIndex = -1;
+        e.tripCard = null;
+      } else {
+        const stop = enRouteStop(e, w);
+        if (stop !== null) e.target = stop;
+      }
       const diff = e.target * U - e.pos;
       if (Math.abs(diff) <= b.speed) {
         e.pos = e.target * U;
@@ -171,7 +240,7 @@ export function stepElevator(e: Elevator, w: World): void {
     case 'open':
       serve(e, w);
       e.timer--;
-      if (e.timer <= 0) decide(e, w);
+      if (e.timer <= 0) decide(e, w, false);
       break;
   }
 }

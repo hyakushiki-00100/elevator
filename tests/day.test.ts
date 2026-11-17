@@ -3,6 +3,7 @@ import { makeBuilding } from '../src/sim/building.ts';
 import { addPassenger, createSim, stateHash, step } from '../src/sim/sim.ts';
 import { computeScore, deliveryPoints, PENALTY_PER_MISS, POINTS_MAX, POINTS_MIN } from '../src/sim/score.ts';
 import { STAGES } from '../src/sim/stages.ts';
+import type { CardId } from '../src/sim/rules.ts';
 import { dayTicks, makePhase, phaseAt, phaseIndexAt, rateAt, type DayPlan } from '../src/sim/traffic.ts';
 import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from '../tools/bots.ts';
 
@@ -209,10 +210,9 @@ describe('ステージ1(較正済みの性質)', () => {
     const c = playDay(everyTicks(greedyBot, 30)).r.score;
     expect(e).toBeGreaterThan(g);
     expect(g).toBeGreaterThan(c);
-    // 3★は上級者でぎりぎり届く、2★は初心者でも届く(較正の前提)
-    expect(e).toBeGreaterThanOrEqual(st.stars[2]);
+    // 2★は手動の初心者でも届く。3★は手動では届かない(較正の前提)
     expect(g).toBeGreaterThanOrEqual(st.stars[1]);
-    expect(g).toBeLessThan(st.stars[2]);
+    expect(e).toBeLessThan(st.stars[2]);
   });
 
   it('ステージのシードは「平均的な日」: 発生人数が200シードの中央値±5%以内', () => {
@@ -232,6 +232,16 @@ describe('ステージ1(較正済みの性質)', () => {
     counts.sort((a, b) => a - b);
     const median = counts[100]!;
     expect(Math.abs(mine - median)).toBeLessThanOrEqual(median * 0.05);
+  });
+
+  it('3★はカードの組み合わせで届き、最初の1枚だけでは届かない', () => {
+    const withRules = (rules: CardId[]) => {
+      const s = createSim({ building: st.building, traffic: st.traffic, rules: [rules] }, st.seed);
+      while (!s.finished) step(s);
+      return computeScore(s.stats, st.stars);
+    };
+    expect(withRules(['nearest']).stars).toBe(2);
+    expect(withRules(['sameDir', 'nearest']).stars).toBe(3);
   });
 
   it('星の閾値は昇順', () => {

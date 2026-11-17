@@ -4,11 +4,12 @@
 import { createSim, step, type SimState } from '../src/sim/sim.ts';
 import { computeScore } from '../src/sim/score.ts';
 import { STAGES } from '../src/sim/stages.ts';
+import type { CardId } from '../src/sim/rules.ts';
 import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from './bots.ts';
 
-function play(stageIdx: number, bot: Bot, seed?: number) {
+function play(stageIdx: number, bot: Bot, seed?: number, rules?: CardId[][]) {
   const st = STAGES[stageIdx]!;
-  const s: SimState = createSim({ building: st.building, traffic: st.traffic }, seed ?? st.seed);
+  const s: SimState = createSim({ building: st.building, traffic: st.traffic, rules }, seed ?? st.seed);
   const perPhase = st.traffic.phases.map(() => ({ spawned: 0, missed: 0, delivered: 0, peakWaiting: 0 }));
   let lastPhase = 0;
   while (!s.finished) {
@@ -69,6 +70,13 @@ for (let i = 0; i < STAGES.length; i++) {
       `avgWait=${sc.avgWaitSec.toFixed(1)}s ticks=${r.s.tick}`,
     );
     r.perPhase.forEach((p, k) => console.log(`   phase${k}: spawned=${p.spawned} delivered=${p.delivered} missed=${p.missed} peakWaiting=${p.peakWaiting}`));
+  }
+  // ルールのカードだけで自動運転(手動操作なし)
+  const ruleSets: CardId[][] = [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['oldest', 'nearest'], ['sameDir', 'oldest'], ['sameDir', 'oldest', 'nearest']];
+  for (const rs of ruleSets) {
+    const r = play(i, idleBot, undefined, [rs]);
+    const avg = Array.from({ length: 20 }, (_, k) => play(i, idleBot, 5000 + k, [rs]).score.score).reduce((a, b) => a + b, 0) / 20;
+    console.log(`rules[${rs.join(',')}]`.padEnd(34) + ` score=${String(r.score.score).padStart(5)} stars=${r.score.stars} missed=${r.score.missed} avgWait=${r.score.avgWaitSec.toFixed(1)}s  20seeds平均=${Math.round(avg)}`);
   }
   // シードによるばらつき(同じステージを別シードで)
   for (const [name, bot] of [['greedy', greedyBot], ['expert', expertBot]] as const) {

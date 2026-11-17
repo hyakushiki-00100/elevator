@@ -2,10 +2,12 @@ import type { Elevator } from '../sim/elevator.ts';
 import type { Passenger } from '../sim/passenger.ts';
 import type { ScoreResult } from '../sim/score.ts';
 import type { SimState } from '../sim/sim.ts';
+import type { CardId } from '../sim/rules.ts';
 import {
-  BUILDING_RIGHT, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL, RETRY_BUTTON, START_BUTTON,
-  carHeight, carTop, floorTop, type Layout, type View,
+  BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
+  RETRY_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, type Layout, type View,
 } from './layout.ts';
+import { drawCard, drawEmptySlot } from './cards.ts';
 import {
   drawNumber, fillCircle, iconCheck, iconClock, iconCross, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
@@ -56,6 +58,13 @@ export interface DrawArgs {
   mode: Mode;
   /** 結果画面を出した時刻(演出用) */
   modeSince: number;
+  /** 編集画面用: 手持ちのカード・枠の数・編集中のルール・選択中の行 */
+  unlocked: readonly CardId[];
+  slotCount: number;
+  editRules: readonly (readonly CardId[])[];
+  editRow: number;
+  /** この日に手に入れたカード(結果画面に出す) */
+  newCard: CardId | null;
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
   now: number;
 }
@@ -83,8 +92,11 @@ export function draw(a: DrawArgs): void {
   drawEffects(ctx, l, a.effects, a.now);
   drawPanel(ctx, s, a.score, a.starThresholds, a.now);
 
-  if (a.mode === 'ready') drawStart(ctx, a.now);
-  if (a.mode === 'result') drawResult(ctx, a.score, a.now - a.modeSince);
+  if (a.mode === 'ready') {
+    if (a.unlocked.length === 0) drawStart(ctx, a.now);
+    else drawEditor(ctx, a);
+  }
+  if (a.mode === 'result') drawResult(ctx, a.score, a.now - a.modeSince, a.newCard);
   ctx.restore();
 }
 
@@ -327,6 +339,18 @@ function drawPanel(
   for (let i = 0; i < 3; i++) {
     iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 46, y, 17, sc.score >= th[i]!);
   }
+
+  // 運行ルールの枠(今動きを決めているカードを白枠で示す)
+  const cw = 36, ch = 47, gap = 8;
+  let ry = 420;
+  for (const e of s.elevators) {
+    if (e.rules.length === 0) continue;
+    const total = e.rules.length * cw + (e.rules.length - 1) * gap;
+    const x0 = PANEL_X + PANEL_W / 2 - total / 2;
+    e.rules.forEach((c, i) => drawCard(ctx, c, x0 + i * (cw + gap), ry, cw, ch, { active: e.ruleIndex === i }));
+    ry += ch + 10;
+    if (ry > LOGICAL_H - 30) break;
+  }
 }
 
 function dim(ctx: CanvasRenderingContext2D): void {
@@ -373,7 +397,69 @@ function drawStart(ctx: CanvasRenderingContext2D, now: number): void {
   ctx.fill();
 }
 
-function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: number): void {
+function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
+  dim(ctx);
+  const p = EDITOR_PANEL;
+  ctx.fillStyle = '#1f2330';
+  roundRect(ctx, p.x, p.y, p.w, p.h, 14);
+  ctx.fill();
+  const rows = a.editRules.length;
+  for (let r = 0; r < rows; r++) {
+    const rules = a.editRules[r]!;
+    for (let i = 0; i < a.slotCount; i++) {
+      const rc = slotRect(r, i, a.slotCount);
+      const c = rules[i];
+      if (c) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h);
+      else drawEmptySlot(ctx, rc.x, rc.y, rc.w, rc.h);
+      // 評価の順番(数字)と、次の枠への矢印
+      drawNumber(ctx, String(i + 1), rc.x + rc.w / 2, rc.y - 8, 13, 'rgba(255,255,255,0.6)');
+      if (i < a.slotCount - 1) {
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        const ax = rc.x + rc.w + 4;
+        const ay = rc.y + rc.h / 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay - 6); ctx.lineTo(ax + 8, ay); ctx.lineTo(ax, ay + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    if (rows > 1) {
+      // エレベーターの選択ボタン(小さなかご)。選択中は白枠
+      const b = rowButtonRect(r, a.slotCount);
+      ctx.fillStyle = '#3a4156';
+      roundRect(ctx, b.x, b.y, b.w, b.h, 5);
+      ctx.fill();
+      drawNumber(ctx, String(r + 1), b.x + b.w / 2, b.y + b.h / 2 + 6, 16, '#ffffff');
+      if (r === a.editRow) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, b.x - 3, b.y - 3, b.w + 6, b.h + 6, 7);
+        ctx.stroke();
+      }
+    }
+  }
+  // 手持ち(選択中のエレベーターに置いてあるカードは薄く)
+  const placed = a.editRules[a.editRow] ?? [];
+  const full = placed.length >= a.slotCount;
+  a.unlocked.forEach((c, i) => {
+    const rc = handRect(i, a.unlocked.length, rows);
+    drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { dim: placed.includes(c) || full });
+  });
+  // 手持ちと枠の間に「上へ置く」矢印
+  const hr = handRect(0, a.unlocked.length, rows);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.moveTo(480, hr.y - 26); ctx.lineTo(490, hr.y - 14); ctx.lineTo(470, hr.y - 14);
+  ctx.closePath();
+  ctx.fill();
+
+  const b = EDITOR_PLAY;
+  const pulse = 1 + 0.04 * Math.sin(a.now / 250);
+  fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, (b.w / 2) * pulse, '#3fbf6a');
+  iconPlay(ctx, b.x + b.w / 2 + 3, b.y + b.h / 2, b.w / 2);
+}
+
+function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: number, newCard: CardId | null): void {
   dim(ctx);
   const p = RESULT_PANEL;
   ctx.fillStyle = '#1f2330';
@@ -402,4 +488,24 @@ function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: num
   const b = RETRY_BUTTON;
   fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2, '#4f7ff0');
   iconRetry(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2);
+
+  // 新しく手に入れたカード: 星のあとに光りながら現れる
+  if (newCard) {
+    const t = Math.max(0, Math.min(1, (sinceMs - 1400) / 400));
+    if (t > 0) {
+      const w = 64 * (0.7 + 0.3 * t), h = 84 * (0.7 + 0.3 * t);
+      const x = p.x + 90 - w / 2, y = b.y + b.h / 2 - h / 2;
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.shadowColor = '#ffd34d';
+      ctx.shadowBlur = 24;
+      drawCard(ctx, newCard, x, y, w, h);
+      ctx.restore();
+      // 「+」の印
+      fillCircle(ctx, x + w, y, 12, '#3fbf6a');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x + w - 6, y - 1.5, 12, 3);
+      ctx.fillRect(x + w - 1.5, y - 6, 3, 12);
+    }
+  }
 }
