@@ -6,8 +6,10 @@ import type { Rng } from './rng.ts';
 export interface TrafficPhase {
   /** この時間帯の長さ(tick) */
   ticks: number;
-  /** 1tickあたりに乗客が1人発生する確率(30tick = 1秒) */
+  /** 時間帯の始まりで、1tickあたりに乗客が1人発生する確率(30tick = 1秒) */
   rate: number;
+  /** 時間帯の終わりでの発生確率。始まりから終わりまで直線的に変わる(だんだん忙しくなる) */
+  rateEnd: number;
   /** 発生した人が「1階(index0)から上へ」向かう割合(朝のラッシュ) */
   fromGround: number;
   /** 発生した人が「上の階から1階へ」向かう割合(夕方のラッシュ)。fromGround との合計は 1 以下 */
@@ -25,9 +27,11 @@ export interface DayPlan {
 }
 
 export function makePhase(overrides: Partial<TrafficPhase> = {}): TrafficPhase {
+  const rate = overrides.rate ?? 0.01;
   return {
     ticks: 1800,
-    rate: 0.01,
+    rate,
+    rateEnd: overrides.rateEnd ?? rate,
     fromGround: 0,
     toGround: 0,
     rushedShare: 0,
@@ -59,13 +63,23 @@ export function dayTicks(plan: DayPlan): number {
 
 /** tick がどの時間帯か。1日が終わっていれば -1 */
 export function phaseIndexAt(plan: DayPlan, tick: number): number {
+  return phaseAt(plan, tick).index;
+}
+
+/** tick がどの時間帯の何tick目か。1日が終わっていれば index = -1 */
+export function phaseAt(plan: DayPlan, tick: number): { index: number; offset: number } {
   let t = tick;
   for (let i = 0; i < plan.phases.length; i++) {
     const len = plan.phases[i]!.ticks;
-    if (t < len) return i;
+    if (t < len) return { index: i, offset: t };
     t -= len;
   }
-  return -1;
+  return { index: -1, offset: 0 };
+}
+
+/** 時間帯の offset tick 目の発生確率 */
+export function rateAt(ph: TrafficPhase, offset: number): number {
+  return ph.rate + ((ph.rateEnd - ph.rate) * offset) / ph.ticks;
 }
 
 export function validatePlan(plan: DayPlan): void {
@@ -74,7 +88,7 @@ export function validatePlan(plan: DayPlan): void {
     plan.phases.length >= 1 &&
     Number.isInteger(plan.overtimeTicks) && plan.overtimeTicks >= 0 &&
     plan.phases.every((p) =>
-      Number.isInteger(p.ticks) && p.ticks >= 1 && okShare(p.rate) &&
+      Number.isInteger(p.ticks) && p.ticks >= 1 && okShare(p.rate) && okShare(p.rateEnd) &&
       okShare(p.fromGround) && okShare(p.toGround) && p.fromGround + p.toGround <= 1 &&
       okShare(p.rushedShare) && okShare(p.groupShare) && okShare(p.luggageShare) &&
       p.rushedShare + p.groupShare + p.luggageShare <= 1);
@@ -88,12 +102,13 @@ export function validatePlan(plan: DayPlan): void {
  */
 export function maybeSpawn(
   ph: TrafficPhase,
+  offset: number,
   rng: Rng,
   b: Building,
   tick: number,
   id: number,
 ): Passenger | null {
-  if (!rng.chance(ph.rate)) return null;
+  if (!rng.chance(rateAt(ph, offset))) return null;
   const mode = rng.next();
   const a = rng.int(b.floors);
   const c = rng.int(b.floors - 1);

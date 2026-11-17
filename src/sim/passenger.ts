@@ -13,13 +13,14 @@ export const KIND_SIZE: Record<Kind, number> = {
 
 /**
  * 我慢の限界(tick)。
- * 45秒では取りこぼしがほぼ起きず焦りが出なかったため、25秒にした(tools/calibrate.ts で確認)。
+ * 45秒 → 25秒 → 16秒と短くしてきた(3日目の判定「簡単すぎる」を受けて)。
+ * 16秒だと「誰から拾うか」の判断が点に効き、運行の考え方による差が広がる(tools/calibrate.ts で確認)。
  */
 export const KIND_PATIENCE: Record<Kind, number> = {
-  normal: 25 * TICKS_PER_SECOND,
-  rushed: 12 * TICKS_PER_SECOND,
-  group: 25 * TICKS_PER_SECOND,
-  luggage: 25 * TICKS_PER_SECOND,
+  normal: 16 * TICKS_PER_SECOND,
+  rushed: 8 * TICKS_PER_SECOND,
+  group: 16 * TICKS_PER_SECOND,
+  luggage: 16 * TICKS_PER_SECOND,
 };
 
 export interface Passenger {

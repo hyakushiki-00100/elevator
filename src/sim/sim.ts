@@ -2,7 +2,7 @@ import type { Building } from './building.ts';
 import { createElevator, stepElevator, type Elevator, type SimEvent } from './elevator.ts';
 import { makePassenger, type Kind, type Passenger, type Stats } from './passenger.ts';
 import { Rng } from './rng.ts';
-import { dayTicks, maybeSpawn, phaseIndexAt, validatePlan, type DayPlan } from './traffic.ts';
+import { dayTicks, maybeSpawn, phaseAt, validatePlan, type DayPlan } from './traffic.ts';
 
 export interface SimConfig {
   building: Building;
@@ -92,10 +92,11 @@ export function step(s: SimState, commands: readonly Command[] = []): void {
 
   for (const c of commands) applyCommand(s, c);
 
-  s.phaseIndex = phaseIndexAt(s.config.traffic, s.tick);
+  const at = phaseAt(s.config.traffic, s.tick);
+  s.phaseIndex = at.index;
   if (s.phaseIndex >= 0) {
     const ph = s.config.traffic.phases[s.phaseIndex]!;
-    const p = maybeSpawn(ph, s.rng, s.config.building, s.tick, s.nextId);
+    const p = maybeSpawn(ph, at.offset, s.rng, s.config.building, s.tick, s.nextId);
     if (p) {
       s.nextId++;
       s.passengers.push(p);

@@ -3,8 +3,8 @@ import { makeBuilding } from '../src/sim/building.ts';
 import { addPassenger, createSim, stateHash, step } from '../src/sim/sim.ts';
 import { computeScore, deliveryPoints, PENALTY_PER_MISS, POINTS_MAX, POINTS_MIN } from '../src/sim/score.ts';
 import { STAGES } from '../src/sim/stages.ts';
-import { dayTicks, makePhase, phaseIndexAt, type DayPlan } from '../src/sim/traffic.ts';
-import { expertBot, greedyBot, idleBot, type Bot } from '../tools/bots.ts';
+import { dayTicks, makePhase, phaseAt, phaseIndexAt, rateAt, type DayPlan } from '../src/sim/traffic.ts';
+import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from '../tools/bots.ts';
 
 function plan(phases: Parameters<typeof makePhase>[0][], overtimeTicks = 0): DayPlan {
   return { phases: phases.map((p) => makePhase(p)), overtimeTicks };
@@ -15,6 +15,31 @@ describe('1日の時間帯', () => {
     const p = plan([{ ticks: 10 }, { ticks: 20 }, { ticks: 5 }]);
     expect(dayTicks(p)).toBe(35);
     expect([0, 9, 10, 29, 30, 34, 35, 999].map((t) => phaseIndexAt(p, t))).toEqual([0, 0, 1, 1, 2, 2, -1, -1]);
+  });
+
+  it('発生率は時間帯の始まりから終わりまで直線的に変わる。rateEnd を省くと一定', () => {
+    const ph = makePhase({ ticks: 100, rate: 0.01, rateEnd: 0.03 });
+    expect(rateAt(ph, 0)).toBeCloseTo(0.01, 12);
+    expect(rateAt(ph, 50)).toBeCloseTo(0.02, 12);
+    expect(rateAt(ph, 99)).toBeCloseTo(0.0298, 12);
+    const flat = makePhase({ ticks: 100, rate: 0.02 });
+    expect(flat.rateEnd).toBe(0.02);
+    expect(rateAt(flat, 77)).toBe(0.02);
+    const p = plan([{ ticks: 10 }, { ticks: 20 }]);
+    expect(phaseAt(p, 15)).toEqual({ index: 1, offset: 5 });
+    expect(phaseAt(p, 30)).toEqual({ index: -1, offset: 0 });
+  });
+
+  it('時間帯の後半ほど人が多く発生する(rate < rateEnd のとき)', () => {
+    const s = createSim({ building: makeBuilding(), traffic: plan([{ ticks: 20000, rate: 0.005, rateEnd: 0.05 }]) }, 8);
+    let first = 0, second = 0;
+    for (let i = 0; i < 20000; i++) {
+      const a = s.stats.spawned;
+      step(s);
+      if (i < 10000) first += s.stats.spawned - a; else second += s.stats.spawned - a;
+    }
+    // 期待値は前半 ≈ 162、後半 ≈ 387
+    expect(second).toBeGreaterThan(first * 1.8);
   });
 
   it('朝は1階から上へ、夕方は上から1階へ向かう人が多い', () => {
@@ -177,9 +202,36 @@ describe('ステージ1(較正済みの性質)', () => {
     expect(a.r.score).toBe(b.r.score);
   });
 
-  it('何もしなければ星0、上級者ボットは初心者ボットより点が高い', () => {
+  it('何もしなければ星0。上級者 > 初心者 > 反応の遅い初心者(運行の考え方と反応が点に出る)', () => {
     expect(playDay(idleBot).r.stars).toBe(0);
-    expect(playDay(expertBot).r.score).toBeGreaterThan(playDay(greedyBot).r.score);
+    const e = playDay(expertBot).r.score;
+    const g = playDay(greedyBot).r.score;
+    const c = playDay(everyTicks(greedyBot, 30)).r.score;
+    expect(e).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(c);
+    // 3★は上級者でぎりぎり届く、2★は初心者でも届く(較正の前提)
+    expect(e).toBeGreaterThanOrEqual(st.stars[2]);
+    expect(g).toBeGreaterThanOrEqual(st.stars[1]);
+    expect(g).toBeLessThan(st.stars[2]);
+  });
+
+  it('ステージのシードは「平均的な日」: 発生人数が200シードの中央値±5%以内', () => {
+    const counts: number[] = [];
+    let mine = 0;
+    for (let seed = 1000; seed < 1200; seed++) {
+      const s = createSim({ building: st.building, traffic: st.traffic }, seed);
+      while (!s.finished) step(s);
+      counts.push(s.stats.spawned);
+      if (seed === st.seed) mine = s.stats.spawned;
+    }
+    if (st.seed < 1000 || st.seed >= 1200) {
+      const s = createSim({ building: st.building, traffic: st.traffic }, st.seed);
+      while (!s.finished) step(s);
+      mine = s.stats.spawned;
+    }
+    counts.sort((a, b) => a - b);
+    const median = counts[100]!;
+    expect(Math.abs(mine - median)).toBeLessThanOrEqual(median * 0.05);
   });
 
   it('星の閾値は昇順', () => {
