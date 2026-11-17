@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeBuilding } from '../src/sim/building.ts';
-import { CARDS, CARD_ORDER, type CardId, type RuleContext } from '../src/sim/rules.ts';
+import { CARDS, inZone, servesFloor, type CardId, type RuleContext } from '../src/sim/rules.ts';
 import { addPassenger, createSim, stateHash, step, type SimState } from '../src/sim/sim.ts';
 import { makeTraffic } from '../src/sim/traffic.ts';
 import { Rng } from '../src/sim/rng.ts';
@@ -48,8 +48,8 @@ describe('カード単体の判断', () => {
 
   it('待機中(includeCur)なら、今いる階の乗れる人が最優先。扉が閉まった直後は今いる階を選ばない', () => {
     const c = { hall: set(6, [2, 3]), oldestSpawn: [Infinity, Infinity, 5, 1, Infinity, Infinity] };
-    for (const id of CARD_ORDER) {
-      if (id === 'oldest') continue; // 長く待つ人を優先するカードは、より長く待つ人(3階)を選ぶ
+    // 長く待つ人を優先するカードは、より長く待つ人(3階)を選ぶ。1階で待つ・担当範囲は呼び出しがあれば当てはまらない
+    for (const id of ['nearest', 'sameDir'] as const) {
       expect(CARDS[id](ctx({ ...c, includeCur: true }))).toBe(2);
       expect(CARDS[id](ctx({ ...c, includeCur: false }))).toBe(3);
     }
@@ -66,6 +66,52 @@ function runUntil(s: SimState, pred: () => boolean, max = 3000): number {
   while (!pred() && n < max) { step(s); n++; }
   return n;
 }
+
+describe('追加のカード(1階で待つ・担当範囲)', () => {
+  it('1階で待つ: 呼び出しが何もないときだけ1階へ。1階にいれば当てはまらない', () => {
+    expect(CARDS.home(ctx())).toBe(0);
+    expect(CARDS.home(ctx({ hall: set(6, [4]) }))).toBeNull();
+    expect(CARDS.home(ctx({ car: set(6, [4]) }))).toBeNull();
+    expect(CARDS.home(ctx({ cur: 0 }))).toBeNull();
+  });
+
+  it('担当範囲: 1階はどちらにも入る。7階建てなら下層=1〜4階、上層=1階と5〜7階', () => {
+    const low = [0, 1, 2, 3, 4, 5, 6].filter((f) => inZone('zoneLow', f, 7));
+    const high = [0, 1, 2, 3, 4, 5, 6].filter((f) => inZone('zoneHigh', f, 7));
+    expect(low).toEqual([0, 1, 2, 3]);
+    expect(high).toEqual([0, 4, 5, 6]);
+    expect(servesFloor([], 5, 7)).toBe(true);
+    expect(servesFloor(['nearest', 'zoneLow'], 5, 7)).toBe(false);
+    expect(servesFloor(['zoneLow', 'zoneHigh'], 5, 7)).toBe(true); // 両方なら全部
+    expect(CARDS.zoneLow(ctx({ hall: set(6, [1]) }))).toBeNull();
+  });
+
+  it('担当範囲外の待っている人には応えないが、乗っている人は担当外の階でも降ろす', () => {
+    const s = createSim({ building: makeBuilding({ floors: 7 }), traffic: makeTraffic({ ratePerTick: 0 }), rules: [['zoneLow', 'nearest']] }, 1);
+    const e = s.elevators[0]!;
+    const far = addPassenger(s, 6, 0);   // 担当外(7階)
+    for (let i = 0; i < 200; i++) step(s);
+    expect(e.phase).toBe('idle');
+    expect(far.state).toBe('waiting');
+    const rider = addPassenger(s, 0, 6); // 1階から担当外の7階へ
+    runUntil(s, () => rider.state === 'arrived');
+    expect(rider.state).toBe('arrived');
+  });
+
+  it('1階で待つ: 用事がなくなると1階へ戻り、戻る途中の待っている人も拾う', () => {
+    const s = createSim({ building: makeBuilding({ floors: 7 }), traffic: makeTraffic({ ratePerTick: 0 }), rules: [['nearest', 'home']] }, 1);
+    const e = s.elevators[0]!;
+    step(s, [{ type: 'goto', elevator: 0, floor: 5 }]);
+    runUntil(s, () => e.phase === 'open' && e.pos === 5000);
+    runUntil(s, () => e.phase === 'moving');
+    expect(e.target).toBe(0);
+    expect(e.tripCard).toBe('home');
+    const p = addPassenger(s, 2, 6);
+    const opened: number[] = [];
+    runUntil(s, () => { if (e.phase === 'open') opened.push(e.pos); return p.state !== 'waiting'; });
+    expect(opened[0]).toBe(2000);
+  });
+});
 
 describe('ルールで動くエレベーター', () => {
   it('カードなしなら、待っている人がいても動かない(手動のみ)', () => {
@@ -157,7 +203,7 @@ describe('ルールで動くエレベーター', () => {
 });
 
 describe('ルールでの長時間運転(不変条件)', () => {
-  const combos: CardId[][] = [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['oldest', 'sameDir', 'nearest']];
+  const combos: CardId[][] = [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['oldest', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'home', 'oldest']];
   for (const rs of combos) {
     it(`[${rs.join(',')}] 2基: 定員超過なし・乗った人は60秒以内に降りる・決定的`, () => {
       const run = () => {

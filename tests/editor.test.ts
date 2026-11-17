@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_ORDER } from '../src/sim/rules.ts';
-import { EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, slotRect } from '../src/render/layout.ts';
-import { fitRules, nextUnlock, placeCard, removeCard, slotCountFor } from '../src/ui/editor.ts';
+import { EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, slotRect, stageTabHit, stageTabRect } from '../src/render/layout.ts';
+import { fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
 
 describe('カードの編集(純粋な関数)', () => {
   it('置く: 末尾に追加。同じカードは1基に1枚まで、枠が埋まれば置けない', () => {
@@ -34,11 +34,22 @@ describe('カードの編集(純粋な関数)', () => {
   });
 
   it('進行: カードを順に1枚ずつ手に入れ、枠の数は持っているカードの数', () => {
-    expect(nextUnlock([], CARD_ORDER)).toBe('nearest');
-    expect(nextUnlock(['nearest'], CARD_ORDER)).toBe('sameDir');
-    expect(nextUnlock([...CARD_ORDER], CARD_ORDER)).toBeNull();
+    expect(nextUnlock([])).toEqual(['nearest']);
+    expect(nextUnlock(['nearest'])).toEqual(['sameDir']);
+    expect(nextUnlock(['nearest', 'sameDir', 'oldest', 'home'])).toEqual(['zoneLow', 'zoneHigh']);
+    expect(nextUnlock([...CARD_ORDER])).toEqual([]);
+    // 手に入る順番に全カードが1回ずつ出てくる
+    expect(UNLOCK_STEPS.flat().slice().sort()).toEqual([...CARD_ORDER].sort());
     expect(slotCountFor([])).toBe(0);
     expect(slotCountFor(['nearest', 'sameDir'])).toBe(2);
+    expect(slotCountFor([...CARD_ORDER])).toBe(5);
+  });
+
+  it('ステージ2はカードを3枚持つと開く', () => {
+    expect(stagesOpen([], 2)).toBe(1);
+    expect(stagesOpen(['nearest', 'sameDir'], 2)).toBe(1);
+    expect(stagesOpen(['nearest', 'sameDir', 'oldest'], 2)).toBe(2);
+    expect(stagesOpen(['nearest', 'sameDir', 'oldest'], 1)).toBe(1);
   });
 });
 
@@ -50,13 +61,16 @@ describe('編集画面の当たり判定', () => {
     expect(editorHit(...c(EDITOR_PLAY), 1, 3, 3)).toEqual({ kind: 'play' });
     expect(editorHit(...c(rowButtonRect(1, 3)), 2, 3, 3)).toEqual({ kind: 'row', row: 1 });
     expect(editorHit(5, 5, 1, 3, 3)).toBeNull();
+    expect(stageTabHit(...c(stageTabRect(1)), 2)).toBe(1);
+    expect(stageTabHit(...c(stageTabRect(0)), 1)).toBeNull(); // 1つしか開いていなければ出さない
   });
 
-  it('5枠・2基でも、すべての要素が編集画面の枠内に収まり、重ならない', () => {
+  it('5枠・2基・全カードを持っていても、すべての要素が編集画面の枠内に収まり、重ならない', () => {
+    const n = CARD_ORDER.length;
     const rects = [
       ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i, 5))),
-      ...[0, 1, 2, 3, 4].map((i) => handRect(i, 5, 2)),
-      rowButtonRect(0, 5), rowButtonRect(1, 5), EDITOR_PLAY,
+      ...Array.from({ length: n }, (_, i) => handRect(i, n, 2)),
+      rowButtonRect(0, 5), rowButtonRect(1, 5), EDITOR_PLAY, stageTabRect(0), stageTabRect(1), stageTabRect(2),
     ];
     for (const r of rects) {
       expect(inRect(EDITOR_PANEL, r.x, r.y)).toBe(true);

@@ -149,3 +149,14 @@ export function editorHit(x: number, y: number, rows: number, slotCount: number,
   for (let i = 0; i < handCount; i++) if (inRect(handRect(i, handCount, rows), x, y)) return { kind: 'hand', index: i };
   return null;
 }
+
+/** ステージの選択ボタン(編集画面の左下) */
+export function stageTabRect(i: number): Rect {
+  return { x: EDITOR_PANEL.x + 16 + i * 52, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 44, h: 40 };
+}
+
+export function stageTabHit(x: number, y: number, stages: number): number | null {
+  if (stages < 2) return null;
+  for (let i = 0; i < stages; i++) if (inRect(stageTabRect(i), x, y)) return i;
+  return null;
+}

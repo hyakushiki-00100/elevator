@@ -1,7 +1,7 @@
 import { UNITS_PER_FLOOR as U, type Building } from './building.ts';
 import type { Passenger, Stats } from './passenger.ts';
 import { deliveryPoints } from './score.ts';
-import { evaluateRules, makeContext, type CardId } from './rules.ts';
+import { evaluateRules, hallCalls, makeContext, type CardId } from './rules.ts';
 
 /** 描画の演出用に sim が出す出来事。採点や状態には使わない */
 export type SimEvent =
@@ -145,15 +145,9 @@ function decide(e: Elevator, w: World, idle: boolean): void {
  */
 function enRouteStop(e: Elevator, w: World): number | null {
   if (e.manualTarget !== null || e.dir === 0) return null;
-  const hallToo = e.tripCard === 'sameDir';
-  let hall: boolean[] | null = null;
-  if (hallToo) {
-    const load = loadOf(e, w);
-    hall = new Array<boolean>(w.building.floors).fill(false);
-    for (const p of w.passengers) {
-      if (p.state === 'waiting' && load + p.size <= w.building.capacity) hall[p.origin] = true;
-    }
-  }
+  // 「同じ方向を優先」と「1階で待つ」で選んだ移動は、途中の待っている階にも止まる(担当範囲内のみ)
+  const hallToo = e.tripCard === 'sameDir' || e.tripCard === 'home';
+  const hall = hallToo ? hallCalls(e, w, loadOf(e, w)) : null;
   // 進行方向で、まだ通り過ぎていない最初の階から目的階の手前まで
   const first = e.dir > 0 ? Math.floor(e.pos / U) + 1 : Math.ceil(e.pos / U) - 1;
   for (let f = first; f !== e.target; f += e.dir) {

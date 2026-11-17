@@ -5,7 +5,7 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  RETRY_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, type Layout, type View,
+  RETRY_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
 } from './layout.ts';
 import { drawCard, drawEmptySlot } from './cards.ts';
 import {
@@ -64,7 +64,11 @@ export interface DrawArgs {
   editRules: readonly (readonly CardId[])[];
   editRow: number;
   /** この日に手に入れたカード(結果画面に出す) */
-  newCard: CardId | null;
+  newCards: readonly CardId[];
+  /** 編集画面のステージ選択: 開いているステージ数・選択中・各ステージの最高の星 */
+  stagesOpen: number;
+  stageIdx: number;
+  bestStars: readonly number[];
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
   now: number;
 }
@@ -96,7 +100,7 @@ export function draw(a: DrawArgs): void {
     if (a.unlocked.length === 0) drawStart(ctx, a.now);
     else drawEditor(ctx, a);
   }
-  if (a.mode === 'result') drawResult(ctx, a.score, a.now - a.modeSince, a.newCard);
+  if (a.mode === 'result') drawResult(ctx, a.score, a.now - a.modeSince, a.newCards);
   ctx.restore();
 }
 
@@ -348,6 +352,8 @@ function drawPanel(
     const total = e.rules.length * cw + (e.rules.length - 1) * gap;
     const x0 = PANEL_X + PANEL_W / 2 - total / 2;
     e.rules.forEach((c, i) => drawCard(ctx, c, x0 + i * (cw + gap), ry, cw, ch, { active: e.ruleIndex === i }));
+    // 2基以上なら、行の左にエレベーターの番号
+    if (s.elevators.length > 1) drawNumber(ctx, String(e.id + 1), PANEL_X + 18, ry + ch / 2 + 6, 15, 'rgba(255,255,255,0.6)');
     ry += ch + 10;
     if (ry > LOGICAL_H - 30) break;
   }
@@ -453,13 +459,25 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   ctx.closePath();
   ctx.fill();
 
+  // ステージの選択(2つ以上開いているとき)。番号と、その下に最高の星
+  if (a.stagesOpen > 1) {
+    for (let i = 0; i < a.stagesOpen; i++) {
+      const r = stageTabRect(i);
+      ctx.fillStyle = i === a.stageIdx ? '#4f7ff0' : '#3a4156';
+      roundRect(ctx, r.x, r.y, r.w, r.h, 6);
+      ctx.fill();
+      drawNumber(ctx, String(i + 1), r.x + r.w / 2, r.y + 21, 16, '#ffffff');
+      for (let k = 0; k < 3; k++) iconStar(ctx, r.x + r.w / 2 + (k - 1) * 12, r.y + 31, 5, (a.bestStars[i] ?? 0) > k);
+    }
+  }
+
   const b = EDITOR_PLAY;
   const pulse = 1 + 0.04 * Math.sin(a.now / 250);
   fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, (b.w / 2) * pulse, '#3fbf6a');
   iconPlay(ctx, b.x + b.w / 2 + 3, b.y + b.h / 2, b.w / 2);
 }
 
-function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: number, newCard: CardId | null): void {
+function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: number, newCards: readonly CardId[]): void {
   dim(ctx);
   const p = RESULT_PANEL;
   ctx.fillStyle = '#1f2330';
@@ -490,11 +508,11 @@ function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: num
   iconRetry(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2);
 
   // 新しく手に入れたカード: 星のあとに光りながら現れる
-  if (newCard) {
-    const t = Math.max(0, Math.min(1, (sinceMs - 1400) / 400));
+  newCards.forEach((newCard, k) => {
+    const t = Math.max(0, Math.min(1, (sinceMs - 1400 - k * 200) / 400));
     if (t > 0) {
       const w = 64 * (0.7 + 0.3 * t), h = 84 * (0.7 + 0.3 * t);
-      const x = p.x + 90 - w / 2, y = b.y + b.h / 2 - h / 2;
+      const x = p.x + 90 + k * 76 - w / 2, y = b.y + b.h / 2 - h / 2;
       ctx.save();
       ctx.globalAlpha = t;
       ctx.shadowColor = '#ffd34d';
@@ -507,5 +525,5 @@ function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: num
       ctx.fillRect(x + w - 6, y - 1.5, 12, 3);
       ctx.fillRect(x + w - 1.5, y - 6, 3, 12);
     }
-  }
+  });
 }

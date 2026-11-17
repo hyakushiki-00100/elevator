@@ -4,10 +4,25 @@ import type { Elevator, World } from './elevator.ts';
 // 運行ルールのカード(5.4節)。
 // カードのID(文字列)は共有文字列の中身になるため、一度公開したら意味を変えない。
 
-export type CardId = 'nearest' | 'sameDir' | 'oldest';
+export type CardId = 'nearest' | 'sameDir' | 'oldest' | 'home' | 'zoneLow' | 'zoneHigh';
 
-/** 手に入る順番(進行に合わせて1枚ずつ解放する) */
-export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'oldest'];
+/** すべてのカード(共有文字列での番号もこの順。末尾に足すだけにし、並べ替えない) */
+export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'oldest', 'home', 'zoneLow', 'zoneHigh'];
+
+/** 担当範囲のカード: 行き先を決めるのではなく、そのエレベーターが応える階を絞る(どの枠に置いても効く) */
+export const ZONE_CARDS: readonly CardId[] = ['zoneLow', 'zoneHigh'];
+
+/**
+ * 担当範囲に入る階か。1階(index0)はどちらの担当にも入る。
+ * 下層: 1階 〜 真ん中の階 / 上層: 1階と、真ん中より上の階
+ */
+export function inZone(card: CardId, f: number, floors: number): boolean {
+  const mid = Math.floor((floors - 1) / 2);
+  if (f === 0) return true;
+  if (card === 'zoneLow') return f <= mid;
+  if (card === 'zoneHigh') return f > mid;
+  return true;
+}
 
 export function isCardId(x: unknown): x is CardId {
   return typeof x === 'string' && (CARD_ORDER as readonly string[]).includes(x);
@@ -59,6 +74,16 @@ const sameDir: CardFn = (c) => {
   return null;
 };
 
+/** 1階で待つ: 呼び出しが何もないとき、1階へ戻る。すでに1階なら当てはまらない */
+const home: CardFn = (c) => {
+  if (c.cur === 0) return null;
+  for (let f = 0; f < c.floors; f++) if (c.hall[f] || c.car[f]) return null;
+  return 0;
+};
+
+/** 担当範囲のカードは行き先を決めない(makeContext で呼び出しを絞る) */
+const zone: CardFn = () => null;
+
 /** 長く待っている階を優先: 一番早く来た(乗れる)人がいる階。同じなら近い階 */
 const oldest: CardFn = (c) => {
   let best: number | null = null;
@@ -74,7 +99,25 @@ const oldest: CardFn = (c) => {
   return best;
 };
 
-export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, oldest };
+export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, oldest, home, zoneLow: zone, zoneHigh: zone };
+
+/** そのエレベーターが応える階か(担当範囲のカードがなければすべて。複数あれば合わせた範囲) */
+export function servesFloor(rules: readonly CardId[], f: number, floors: number): boolean {
+  const zones = rules.filter((c) => ZONE_CARDS.includes(c));
+  return zones.length === 0 || zones.some((z) => inZone(z, f, floors));
+}
+
+/** 待っている人のうち、このエレベーターが応える(担当範囲内で、今の空きに乗れる)人がいる階 */
+export function hallCalls(e: Elevator, w: World, load: number): boolean[] {
+  const floors = w.building.floors;
+  const hall = new Array<boolean>(floors).fill(false);
+  for (const p of w.passengers) {
+    if (p.state !== 'waiting' || load + p.size > w.building.capacity) continue;
+    if (!servesFloor(e.rules, p.origin, floors)) continue;
+    hall[p.origin] = true;
+  }
+  return hall;
+}
 
 export function makeContext(e: Elevator, w: World, includeCur: boolean, load: number): RuleContext {
   const floors = w.building.floors;
@@ -82,6 +125,7 @@ export function makeContext(e: Elevator, w: World, includeCur: boolean, load: nu
   const oldestSpawn = new Array<number>(floors).fill(Infinity);
   for (const p of w.passengers) {
     if (p.state !== 'waiting' || load + p.size > w.building.capacity) continue;
+    if (!servesFloor(e.rules, p.origin, floors)) continue;
     hall[p.origin] = true;
     if (p.spawnTick < oldestSpawn[p.origin]!) oldestSpawn[p.origin] = p.spawnTick;
   }

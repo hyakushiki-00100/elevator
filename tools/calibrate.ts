@@ -27,6 +27,24 @@ function play(stageIdx: number, bot: Bot, seed?: number, rules?: CardId[][]) {
   return { s, perPhase, score: computeScore(s.stats, st.stars) };
 }
 
+/** 較正で試すカードの組み合わせ(エレベーターの数ごと) */
+function ruleSetsFor(elevators: number): CardId[][][] {
+  if (elevators === 1) {
+    return [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['oldest', 'nearest'], ['sameDir', 'oldest'], ['sameDir', 'oldest', 'nearest']].map((r) => [r as CardId[]]);
+  }
+  const all = (r: CardId[]) => Array.from({ length: elevators }, () => r);
+  return [
+    all(['nearest']),
+    all(['sameDir', 'nearest']),
+    all(['oldest']),
+    all(['sameDir', 'nearest', 'home']),
+    [['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest']],
+    [['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'sameDir', 'nearest', 'home']],
+    [['zoneHigh', 'sameDir', 'nearest', 'home'], ['zoneLow', 'sameDir', 'nearest']],
+    [['zoneLow', 'nearest', 'home'], ['zoneHigh', 'nearest', 'home']],
+  ];
+}
+
 /**
  * シードの選び方: 固定シードの1日は運のぶれが大きい(上級者ボットが初心者ボットに負ける日もある)。
  * 発生人数が中央値に近く、ボット同士の点の比が平均に近いシードを選ぶ。
@@ -72,11 +90,11 @@ for (let i = 0; i < STAGES.length; i++) {
     r.perPhase.forEach((p, k) => console.log(`   phase${k}: spawned=${p.spawned} delivered=${p.delivered} missed=${p.missed} peakWaiting=${p.peakWaiting}`));
   }
   // ルールのカードだけで自動運転(手動操作なし)
-  const ruleSets: CardId[][] = [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['oldest', 'nearest'], ['sameDir', 'oldest'], ['sameDir', 'oldest', 'nearest']];
-  for (const rs of ruleSets) {
-    const r = play(i, idleBot, undefined, [rs]);
-    const avg = Array.from({ length: 20 }, (_, k) => play(i, idleBot, 5000 + k, [rs]).score.score).reduce((a, b) => a + b, 0) / 20;
-    console.log(`rules[${rs.join(',')}]`.padEnd(34) + ` score=${String(r.score.score).padStart(5)} stars=${r.score.stars} missed=${r.score.missed} avgWait=${r.score.avgWaitSec.toFixed(1)}s  20seeds平均=${Math.round(avg)}`);
+  for (const rs of ruleSetsFor(STAGES[i]!.building.elevators)) {
+    const r = play(i, idleBot, undefined, rs);
+    const avg = Array.from({ length: 20 }, (_, k) => play(i, idleBot, 5000 + k, rs).score.score).reduce((a, b) => a + b, 0) / 20;
+    const label = rs.map((r1) => r1.join(',')).join(' / ');
+    console.log(`rules[${label}]`.padEnd(52) + ` score=${String(r.score.score).padStart(5)} stars=${r.score.stars} missed=${r.score.missed} avgWait=${r.score.avgWaitSec.toFixed(1)}s  20seeds平均=${Math.round(avg)}`);
   }
   // シードによるばらつき(同じステージを別シードで)
   for (const [name, bot] of [['greedy', greedyBot], ['expert', expertBot]] as const) {

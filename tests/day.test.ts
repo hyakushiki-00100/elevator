@@ -249,3 +249,45 @@ describe('ステージ1(較正済みの性質)', () => {
     expect(st.stars[1]).toBeLessThan(st.stars[2]);
   });
 });
+
+describe('ステージ2(2基・較正済みの性質)', () => {
+  const st = STAGES[1]!;
+  const play = (rules?: CardId[][], bot?: Bot) => {
+    const s = createSim({ building: st.building, traffic: st.traffic, rules }, st.seed);
+    while (!s.finished) step(s, bot ? bot(s) : []);
+    return { s, r: computeScore(s.stats, st.stars) };
+  };
+
+  it('2基・7階で、1日は3分+延長', () => {
+    expect(st.building.elevators).toBe(2);
+    expect(dayTicks(st.traffic)).toBe(5400);
+  });
+
+  it('3★はゾーン分け(担当範囲のカード)で届き、ゾーンなしや手動相当では届かない', () => {
+    expect(play([['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest']]).r.stars).toBe(3);
+    expect(play([['sameDir', 'nearest'], ['sameDir', 'nearest']]).r.stars).toBeLessThan(3);
+    expect(play([['nearest'], ['nearest']]).r.stars).toBeLessThan(3);
+    expect(play(undefined, expertBot).r.stars).toBeLessThan(3);
+    expect(play(undefined, greedyBot).r.stars).toBe(2);
+    expect(play(undefined, idleBot).r.stars).toBe(0);
+  });
+
+  it('朝は1階から上へ向かう人が多い(朝のラッシュ)', () => {
+    const s = createSim({ building: st.building, traffic: st.traffic }, st.seed);
+    let morning = 0, fromGround = 0;
+    while (!s.finished) {
+      step(s);
+      if (s.phaseIndex !== 0) continue;
+      for (const p of s.passengers) if (p.spawnTick === s.tick - 1) { morning++; if (p.origin === 0) fromGround++; }
+    }
+    expect(morning).toBeGreaterThan(20);
+    expect(fromGround / morning).toBeGreaterThan(0.75);
+  });
+
+  it('ステージのシードは「平均的な日」: 発生人数が200シードの中央値±5%以内', () => {
+    const count = (seed: number) => { const s = createSim({ building: st.building, traffic: st.traffic }, seed); while (!s.finished) step(s); return s.stats.spawned; };
+    const counts = Array.from({ length: 200 }, (_, k) => count(1000 + k)).sort((a, b) => a - b);
+    const median = counts[100]!;
+    expect(Math.abs(count(st.seed) - median)).toBeLessThanOrEqual(median * 0.05);
+  });
+});

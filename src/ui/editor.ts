@@ -27,10 +27,29 @@ export function fitRules(rules: RuleSet, elevators: number, slotCount: number, u
   return out;
 }
 
-/** 1日を終えたときの進行: まだ持っていないカードを順に1枚手に入れる。枠の数は持っているカードの数(最大5) */
-export function nextUnlock(unlocked: readonly CardId[], order: readonly CardId[]): CardId | null {
-  for (const c of order) if (!unlocked.includes(c)) return c;
-  return null;
+/**
+ * カードを手に入れる順番。1日を終えるごとに1段ずつ進む。
+ * 担当範囲のカード(下層・上層)は2基のステージで初めて意味があるので、2枚組で手に入る。
+ */
+export const UNLOCK_STEPS: readonly (readonly CardId[])[] = [
+  ['nearest'],
+  ['sameDir'],
+  ['oldest'],
+  ['home'],
+  ['zoneLow', 'zoneHigh'],
+];
+
+/** 1日を終えたときに手に入るカード(もう全部持っていれば空) */
+export function nextUnlock(unlocked: readonly CardId[], steps: readonly (readonly CardId[])[] = UNLOCK_STEPS): CardId[] {
+  for (const s of steps) {
+    if (s.some((c) => !unlocked.includes(c))) return s.filter((c) => !unlocked.includes(c));
+  }
+  return [];
+}
+
+/** カードを3枚持ったら(=3日遊んだら)ステージ2(2基)が開く */
+export function stagesOpen(unlocked: readonly CardId[], totalStages: number): number {
+  return Math.min(totalStages, unlocked.length >= 3 ? 2 : 1);
 }
 
 export function slotCountFor(unlocked: readonly CardId[]): number {
