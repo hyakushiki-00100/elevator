@@ -11,12 +11,15 @@ export const KIND_SIZE: Record<Kind, number> = {
   luggage: 2,
 };
 
-/** 我慢の限界(tick) */
+/**
+ * 我慢の限界(tick)。
+ * 45秒では取りこぼしがほぼ起きず焦りが出なかったため、25秒にした(tools/calibrate.ts で確認)。
+ */
 export const KIND_PATIENCE: Record<Kind, number> = {
-  normal: 45 * TICKS_PER_SECOND,
-  rushed: 20 * TICKS_PER_SECOND,
-  group: 45 * TICKS_PER_SECOND,
-  luggage: 45 * TICKS_PER_SECOND,
+  normal: 25 * TICKS_PER_SECOND,
+  rushed: 12 * TICKS_PER_SECOND,
+  group: 25 * TICKS_PER_SECOND,
+  luggage: 25 * TICKS_PER_SECOND,
 };
 
 export interface Passenger {
@@ -30,6 +33,8 @@ export interface Passenger {
   state: PassengerState;
   /** 乗っているエレベーターの id。乗っていなければ -1 */
   elevatorId: number;
+  /** 乗るまでに待った tick 数。乗る前は -1 */
+  waitTicks: number;
 }
 
 export interface Stats {
@@ -40,6 +45,8 @@ export interface Stats {
   missed: number;
   /** 乗車した人の待ち時間の合計(tick) */
   totalWait: number;
+  /** 運び終えた人の点の合計(1人ごとの点は score.ts の deliveryPoints で決まる) */
+  servicePoints: number;
 }
 
 export function makePassenger(
@@ -59,5 +66,6 @@ export function makePassenger(
     patience: KIND_PATIENCE[kind],
     state: 'waiting',
     elevatorId: -1,
+    waitTicks: -1,
   };
 }

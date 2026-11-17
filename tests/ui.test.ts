@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { makeBuilding } from '../src/sim/building.ts';
-import { LOGICAL_H, LOGICAL_W, carHeight, carTop, floorTop, hitTest, makeLayout, makeView, toLogical } from '../src/render/layout.ts';
+import {
+  BUILDING_RIGHT, LOGICAL_H, LOGICAL_W, PANEL_X, RESULT_PANEL, RETRY_BUTTON, START_BUTTON,
+  carHeight, carTop, floorTop, hitTest, inRect, makeLayout, makeView, toLogical,
+} from '../src/render/layout.ts';
 import { handleTap } from '../src/ui/controls.ts';
 
 describe('layout / hitTest', () => {
@@ -28,16 +31,40 @@ describe('layout / hitTest', () => {
     expect(hitTest(l, x, y, [0, 0])).toEqual({ kind: 'floor', floor: 2 });
   });
 
-  it('シャフトは重ならず、画面内に収まる', () => {
+  it('シャフトは重ならず、建物の領域内に収まる(情報パネルにはみ出さない)', () => {
     expect(l.shaftX[0]! + l.shaftW).toBeLessThan(l.shaftX[1]!);
-    expect(l.shaftX[1]! + l.shaftW).toBeLessThanOrEqual(LOGICAL_W);
-    expect(l.queueRight).toBeGreaterThan(l.queueLeft + 60);
+    expect(l.shaftX[1]! + l.shaftW).toBeLessThanOrEqual(BUILDING_RIGHT);
+    expect(BUILDING_RIGHT).toBeLessThan(PANEL_X);
+    expect(l.queueRight).toBeGreaterThan(l.queueLeft + 200);
+  });
+
+  it('情報パネルの上のタップは階として扱わない', () => {
+    expect(hitTest(l, PANEL_X + 50, floorTop(l, 2) + 10, [0, 0])).toBeNull();
+  });
+
+  it('階が多くても(10階)帯の高さが確保される', () => {
+    const l10 = makeLayout(makeBuilding({ floors: 10 }));
+    expect(l10.floorH).toBeGreaterThanOrEqual(45);
+    expect(floorTop(l10, 0) + l10.floorH).toBeLessThanOrEqual(LOGICAL_H);
+  });
+
+  it('結果画面・開始画面のボタンは画面内にあり、やり直しボタンは結果の枠の中', () => {
+    for (const r of [RESULT_PANEL, RETRY_BUTTON, START_BUTTON]) {
+      expect(r.x).toBeGreaterThanOrEqual(0);
+      expect(r.y).toBeGreaterThanOrEqual(0);
+      expect(r.x + r.w).toBeLessThanOrEqual(LOGICAL_W);
+      expect(r.y + r.h).toBeLessThanOrEqual(LOGICAL_H);
+    }
+    expect(inRect(RESULT_PANEL, RETRY_BUTTON.x, RETRY_BUTTON.y)).toBe(true);
+    expect(inRect(RESULT_PANEL, RETRY_BUTTON.x + RETRY_BUTTON.w, RETRY_BUTTON.y + RETRY_BUTTON.h)).toBe(true);
+    expect(inRect(RETRY_BUTTON, RETRY_BUTTON.x + 1, RETRY_BUTTON.y + 1)).toBe(true);
+    expect(inRect(RETRY_BUTTON, RETRY_BUTTON.x - 1, RETRY_BUTTON.y)).toBe(false);
   });
 });
 
 describe('View', () => {
   it('縦長・横長のどちらでも論理領域が収まり、変換が往復できる', () => {
-    for (const [w, h] of [[390, 800], [1280, 720], [360, 640]] as const) {
+    for (const [w, h] of [[390, 800], [1280, 720], [960, 540], [800, 600]] as const) {
       const v = makeView(w, h);
       expect(v.offsetX).toBeGreaterThanOrEqual(0);
       expect(v.offsetY).toBeGreaterThanOrEqual(0);

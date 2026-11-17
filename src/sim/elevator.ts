@@ -1,5 +1,12 @@
 import { UNITS_PER_FLOOR as U, type Building } from './building.ts';
 import type { Passenger, Stats } from './passenger.ts';
+import { deliveryPoints } from './score.ts';
+
+/** 描画の演出用に sim が出す出来事。採点や状態には使わない */
+export type SimEvent =
+  | { type: 'delivered'; floor: number; elevator: number }
+  | { type: 'boarded'; floor: number; elevator: number }
+  | { type: 'missed'; floor: number };
 
 export type Phase = 'idle' | 'moving' | 'open';
 
@@ -28,6 +35,8 @@ export interface World {
   tick: number;
   passengers: Passenger[];
   stats: Stats;
+  /** このtickに起きた出来事(step の最初に空になる) */
+  events: SimEvent[];
 }
 
 export function createElevator(id: number, floors: number, startFloor = 0): Elevator {
@@ -104,6 +113,8 @@ function serve(e: Elevator, w: World): void {
       p.state = 'arrived';
       p.elevatorId = -1;
       w.stats.delivered++;
+      w.stats.servicePoints += deliveryPoints(p.waitTicks);
+      w.events.push({ type: 'delivered', floor: cur, elevator: e.id });
       changed = true;
     }
   }
@@ -119,7 +130,9 @@ function serve(e: Elevator, w: World): void {
       e.stops[p.dest] = true;
       w.stats.boarded++;
       // 待ち時間は「このtickの終わり時点」で数える(sim.ts の我慢の限界の判定と同じ定義)
-      w.stats.totalWait += w.tick + 1 - p.spawnTick;
+      p.waitTicks = w.tick + 1 - p.spawnTick;
+      w.stats.totalWait += p.waitTicks;
+      w.events.push({ type: 'boarded', floor: cur, elevator: e.id });
       changed = true;
     }
   }

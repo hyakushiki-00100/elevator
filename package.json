@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "calibrate": "node tools/calibrate.ts"
   },
   "devDependencies": {
     "typescript": "~7.0.2",

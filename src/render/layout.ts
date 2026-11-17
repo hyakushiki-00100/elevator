@@ -1,8 +1,14 @@
 import { UNITS_PER_FLOOR, type Building } from '../sim/building.ts';
 
-/** 論理座標。実画面には「縦横比を保って中央に収める」(縦長/横長が決まるまでの暫定) */
-export const LOGICAL_W = 360;
-export const LOGICAL_H = 640;
+/** 論理座標(横長 16:9)。実画面には縦横比を保って中央に収める */
+export const LOGICAL_W = 960;
+export const LOGICAL_H = 540;
+/** 左: 建物の断面 / 右: 情報パネル(後でルールのカードもここに置く) */
+export const BUILDING_RIGHT = 640;
+export const PANEL_X = 660;
+export const PANEL_W = LOGICAL_W - PANEL_X - 16;
+
+export interface Rect { x: number; y: number; w: number; h: number }
 
 export interface Layout {
   floors: number;
@@ -17,12 +23,12 @@ export interface Layout {
 }
 
 export function makeLayout(b: Building): Layout {
-  const top = 24;
-  const bottom = 24;
-  const shaftW = 64;
-  const gap = 12;
+  const top = 20;
+  const bottom = 20;
+  const shaftW = 72;
+  const gap = 14;
   const n = b.elevators;
-  const firstX = LOGICAL_W - 12 - (n * shaftW + (n - 1) * gap);
+  const firstX = BUILDING_RIGHT - 12 - (n * shaftW + (n - 1) * gap);
   const shaftX: number[] = [];
   for (let i = 0; i < n; i++) shaftX.push(firstX + i * (shaftW + gap));
   return {
@@ -31,8 +37,8 @@ export function makeLayout(b: Building): Layout {
     floorH: (LOGICAL_H - top - bottom) / b.floors,
     shaftW,
     shaftX,
-    queueLeft: 36,
-    queueRight: firstX - 14,
+    queueLeft: 44,
+    queueRight: firstX - 18,
   };
 }
 
@@ -53,10 +59,10 @@ export function carHeight(l: Layout): number {
 /** elevator の場合も、タップ位置の階を floor に入れる(1基のときは階のタップとして扱うため) */
 export type Hit = { kind: 'elevator'; index: number; floor: number } | { kind: 'floor'; floor: number } | null;
 
-/** 論理座標 (x, y) に何があるか。かごが優先で、それ以外は階の帯。 */
+/** 論理座標 (x, y) に何があるか。かごが優先で、それ以外は階の帯。情報パネルの上は null */
 export function hitTest(l: Layout, x: number, y: number, carPos: readonly number[]): Hit {
   const bottomY = l.top + l.floors * l.floorH;
-  if (y < l.top || y >= bottomY || x < 0 || x > LOGICAL_W) return null;
+  if (y < l.top || y >= bottomY || x < 0 || x > BUILDING_RIGHT) return null;
   const floor = l.floors - 1 - Math.floor((y - l.top) / l.floorH);
   for (let i = 0; i < l.shaftX.length; i++) {
     const cx = l.shaftX[i]!;
@@ -66,6 +72,16 @@ export function hitTest(l: Layout, x: number, y: number, carPos: readonly number
     }
   }
   return { kind: 'floor', floor };
+}
+
+/** 結果画面の枠と、やり直しボタン */
+export const RESULT_PANEL: Rect = { x: 250, y: 70, w: 460, h: 400 };
+export const RETRY_BUTTON: Rect = { x: 480 - 44, y: 470 - 24 - 88, w: 88, h: 88 };
+/** 開始画面のボタン */
+export const START_BUTTON: Rect = { x: 480 - 60, y: 270 - 60, w: 120, h: 120 };
+
+export function inRect(r: Rect, x: number, y: number): boolean {
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
 
 /** 実画面(css px)→論理座標への変換 */
