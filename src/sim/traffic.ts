@@ -21,7 +21,11 @@ export function makeTraffic(overrides: Partial<TrafficConfig> = {}): TrafficConf
   };
 }
 
-/** 乱数の消費回数が結果によらず一定になるようにしてある(決定性のため) */
+/**
+ * 乱数の消費は「発生しない tick は1回、発生する tick は4回」。
+ * 消費回数は結果に依存するが、同じシードなら同じ列になるので決定性は保たれる。
+ * この順序を変えると過去の共有結果が再現できなくなるため、変更時は形式の版番号を上げること。
+ */
 export function maybeSpawn(
   cfg: TrafficConfig,
   rng: Rng,

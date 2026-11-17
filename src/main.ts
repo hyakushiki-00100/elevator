@@ -14,6 +14,15 @@ const config = {
   building: makeBuilding({ floors: 5, elevators: 1, capacity: 8 }),
   traffic: makeTraffic({ ratePerTick: 0.012 }),
 };
+// 開発時だけ、URLで建物を変えて確認できる(例: ?elevators=2&floors=7)。本番ビルドでは無効。
+if (import.meta.env.DEV) {
+  const q = new URLSearchParams(location.search);
+  const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
+  config.building = makeBuilding({
+    floors: num('floors') ?? config.building.floors,
+    elevators: num('elevators') ?? config.building.elevators,
+  });
+}
 // 乱数のシードはここ(simの外)で決める。simの中では Math.random を使わない。
 const seed = (Date.now() & 0x7fffffff) >>> 0;
 const state: SimState = createSim(config, seed);

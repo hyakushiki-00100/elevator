@@ -7,8 +7,10 @@ export interface Elevator {
   id: number;
   /** 位置(ミリ階) */
   pos: number;
-  /** 進行方向。0 は停止中 */
+  /** 今動いている方向。0 は停止中(表示用) */
   dir: -1 | 0 | 1;
+  /** 最後に動いた方向。止まっている間も保持し、次の行き先選びで優先する */
+  heading: -1 | 1;
   phase: Phase;
   /** open の間、扉が閉まるまでの残り tick */
   timer: number;
@@ -33,6 +35,7 @@ export function createElevator(id: number, floors: number, startFloor = 0): Elev
     id,
     pos: startFloor * U,
     dir: 0,
+    heading: 1,
     phase: 'idle',
     timer: 0,
     target: startFloor,
@@ -51,8 +54,7 @@ export function loadOf(e: Elevator, w: World): number {
 
 /** 今いる階から見て、進行方向を優先して最も近い「行き先ボタンが押された階」 */
 function nearestStop(e: Elevator, cur: number, floors: number): number | null {
-  const dir = e.dir === 0 ? 1 : e.dir;
-  for (const sign of [dir, -dir]) {
+  for (const sign of [e.heading, -e.heading]) {
     for (let d = 1; d < floors; d++) {
       const f = cur + sign * d;
       if (f < 0 || f >= floors) break;
@@ -86,6 +88,7 @@ function decide(e: Elevator, w: World): void {
   }
   e.target = target;
   e.dir = target > cur ? 1 : -1;
+  e.heading = e.dir;
   e.phase = 'moving';
 }
 
@@ -115,7 +118,8 @@ function serve(e: Elevator, w: World): void {
       load += p.size;
       e.stops[p.dest] = true;
       w.stats.boarded++;
-      w.stats.totalWait += w.tick - p.spawnTick;
+      // 待ち時間は「このtickの終わり時点」で数える(sim.ts の我慢の限界の判定と同じ定義)
+      w.stats.totalWait += w.tick + 1 - p.spawnTick;
       changed = true;
     }
   }
@@ -146,6 +150,7 @@ export function stepElevator(e: Elevator, w: World): void {
         serve(e, w);
       } else {
         e.dir = diff > 0 ? 1 : -1;
+        e.heading = e.dir;
         e.pos += e.dir * b.speed;
       }
       break;

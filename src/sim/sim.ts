@@ -24,7 +24,19 @@ export interface SimState {
 
 export type Command = { type: 'goto'; elevator: number; floor: number };
 
+export function validateBuilding(b: Building): void {
+  const ok =
+    Number.isInteger(b.floors) && b.floors >= 2 &&
+    Number.isInteger(b.elevators) && b.elevators >= 1 &&
+    Number.isInteger(b.capacity) && b.capacity >= 1 &&
+    Number.isInteger(b.speed) && b.speed >= 1 &&
+    Number.isInteger(b.doorTicks) && b.doorTicks >= 1 &&
+    Number.isInteger(b.boardTicks) && b.boardTicks >= 0;
+  if (!ok) throw new Error(`invalid building: ${JSON.stringify(b)}`);
+}
+
 export function createSim(config: SimConfig, seed: number): SimState {
+  validateBuilding(config.building);
   const elevators: Elevator[] = [];
   for (let i = 0; i < config.building.elevators; i++) {
     elevators.push(createElevator(i, config.building.floors));
@@ -96,10 +108,11 @@ export function stateHash(s: SimState): number {
   mix(s.nextId);
   for (const q of s.passengers) {
     mix(q.id); mix(q.origin); mix(q.dest); mix(q.size); mix(q.elevatorId);
+    mix(q.spawnTick); mix(q.patience);
     mix(q.state === 'waiting' ? 0 : 1);
   }
   for (const e of s.elevators) {
-    mix(e.pos); mix(e.dir); mix(e.timer); mix(e.target);
+    mix(e.pos); mix(e.dir); mix(e.heading); mix(e.timer); mix(e.target);
     mix(e.phase === 'idle' ? 0 : e.phase === 'moving' ? 1 : 2);
     mix(e.manualTarget ?? -1);
     for (const x of e.stops) mix(x ? 1 : 0);

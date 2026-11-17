@@ -50,20 +50,21 @@ export function carHeight(l: Layout): number {
   return l.floorH - 4;
 }
 
-export type Hit = { kind: 'elevator'; index: number } | { kind: 'floor'; floor: number } | null;
+/** elevator の場合も、タップ位置の階を floor に入れる(1基のときは階のタップとして扱うため) */
+export type Hit = { kind: 'elevator'; index: number; floor: number } | { kind: 'floor'; floor: number } | null;
 
 /** 論理座標 (x, y) に何があるか。かごが優先で、それ以外は階の帯。 */
 export function hitTest(l: Layout, x: number, y: number, carPos: readonly number[]): Hit {
+  const bottomY = l.top + l.floors * l.floorH;
+  if (y < l.top || y >= bottomY || x < 0 || x > LOGICAL_W) return null;
+  const floor = l.floors - 1 - Math.floor((y - l.top) / l.floorH);
   for (let i = 0; i < l.shaftX.length; i++) {
     const cx = l.shaftX[i]!;
     const cy = carTop(l, carPos[i] ?? 0);
     if (x >= cx && x <= cx + l.shaftW && y >= cy && y <= cy + carHeight(l)) {
-      return { kind: 'elevator', index: i };
+      return { kind: 'elevator', index: i, floor };
     }
   }
-  const bottomY = l.top + l.floors * l.floorH;
-  if (y < l.top || y >= bottomY || x < 0 || x > LOGICAL_W) return null;
-  const floor = l.floors - 1 - Math.floor((y - l.top) / l.floorH);
   return { kind: 'floor', floor };
 }
 

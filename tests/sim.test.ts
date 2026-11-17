@@ -197,3 +197,124 @@ describe('統計の整合', () => {
     expect(st.spawned).toBe(st.delivered + st.missed + s.passengers.length);
   });
 });
+
+describe('検証で追加したテスト', () => {
+  it('[回帰] 下向きに来て止まった後は、下の行き先を先に回る(進行方向の優先)', () => {
+    const s = quietSim();
+    const e = s.elevators[0]!;
+    step(s, [{ type: 'goto', elevator: 0, floor: 3 }]);
+    run(s, 200); // index3 で待機
+    addPassenger(s, 1, 0);
+    addPassenger(s, 1, 4);
+    step(s, [{ type: 'goto', elevator: 0, floor: 1 }]); // 下向きに index1 へ
+    let sawOpenAt1 = false;
+    for (let i = 0; i < 500; i++) {
+      step(s);
+      if (e.phase === 'open' && e.pos === 1000) sawOpenAt1 = true;
+      if (sawOpenAt1 && e.phase === 'moving') break;
+    }
+    expect(sawOpenAt1).toBe(true);
+    expect({ target: e.target, dir: e.dir }).toEqual({ target: 0, dir: -1 });
+  });
+
+  it('上向きに来た場合は、上の行き先を先に回る', () => {
+    const s = quietSim();
+    const e = s.elevators[0]!;
+    addPassenger(s, 2, 0);
+    addPassenger(s, 2, 4);
+    step(s, [{ type: 'goto', elevator: 0, floor: 2 }]); // 上向きに index2 へ
+    let sawOpen = false;
+    for (let i = 0; i < 500; i++) {
+      step(s);
+      if (e.phase === 'open' && e.pos === 2000) sawOpen = true;
+      if (sawOpen && e.phase === 'moving') break;
+    }
+    expect({ target: e.target, dir: e.dir }).toEqual({ target: 4, dir: 1 });
+  });
+
+  it('扉が開いている間に来た人も乗れ、扉の時間が延びる', () => {
+    const s = quietSim();
+    const e = s.elevators[0]!;
+    step(s, [{ type: 'goto', elevator: 0, floor: 0 }]); // 扉を開ける
+    run(s, s.building.doorTicks - 3); // 閉まる直前
+    expect(e.phase).toBe('open');
+    const p = addPassenger(s, 0, 2);
+    step(s);
+    expect(p.state).toBe('riding');
+    expect(e.timer).toBe(s.building.boardTicks - 1);
+  });
+
+  it('2基: 別のエレベーターの乗客は降ろさない', () => {
+    const s = quietSim({ elevators: 2 });
+    const a = addPassenger(s, 0, 2);
+    step(s, [{ type: 'goto', elevator: 0, floor: 0 }]);
+    run(s, 3);
+    expect(a.state).toBe('riding');
+    expect(a.elevatorId).toBe(0);
+    // 1号機を index2 に先回りさせても、0号機の乗客は降りない
+    step(s, [{ type: 'goto', elevator: 1, floor: 2 }]);
+    run(s, 60);
+    expect(s.elevators[1]!.pos).toBe(2000);
+    expect(a.state).toBe('riding');
+  });
+
+  it('待ち時間の定義: 乗った tick の終わり時点での待ち tick 数(我慢の限界と同じ数え方)', () => {
+    const s = quietSim();
+    addPassenger(s, 0, 2); // spawnTick = 0
+    step(s, [{ type: 'goto', elevator: 0, floor: 0 }]); // tick0: idle→open
+    step(s); // tick1: 乗る → 待ち = 1+1-0 = 2
+    expect(s.stats.boarded).toBe(1);
+    expect(s.stats.totalWait).toBe(2);
+  });
+
+  it('不正な建物の設定は作成時に弾く', () => {
+    const bad = [{ floors: 1 }, { elevators: 0 }, { speed: 0 }, { doorTicks: 0 }, { floors: 2.5 }];
+    for (const o of bad) {
+      expect(() => createSim({ building: makeBuilding(o), traffic: makeTraffic() }, 1)).toThrow();
+    }
+  });
+
+  it('発生する乗客は常に範囲内で、出発階と行き先が違う(長時間)', () => {
+    const s = createSim(
+      { building: makeBuilding({ floors: 7 }), traffic: makeTraffic({ ratePerTick: 0.5, groupShare: 0.3, luggageShare: 0.3, rushedShare: 0.2 }) },
+      5,
+    );
+    const seen = new Set<string>();
+    let bad = 0;
+    let checked = 0;
+    for (let i = 0; i < 3000; i++) {
+      step(s);
+      // 新しく発生した人(spawnTick が今の tick)だけを調べる
+      for (const p of s.passengers) {
+        if (p.spawnTick !== s.tick - 1) continue;
+        checked++;
+        if (p.origin < 0 || p.origin >= 7 || p.dest < 0 || p.dest >= 7 || p.dest === p.origin) bad++;
+        seen.add(p.kind);
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect(bad).toBe(0);
+    expect(seen).toEqual(new Set(['normal', 'rushed', 'group', 'luggage']));
+  });
+
+  it('定員を超えて乗ることはない(長時間・ランダム操作)', () => {
+    const s = createSim(
+      { building: makeBuilding({ elevators: 2, capacity: 5 }), traffic: makeTraffic({ ratePerTick: 0.2, groupShare: 0.3, luggageShare: 0.3 }) },
+      77,
+    );
+    const r = new Rng(9); // 操作用の別乱数
+    for (let i = 0; i < 8000; i++) {
+      const cmds = r.chance(0.05) ? [{ type: 'goto' as const, elevator: r.int(2), floor: r.int(5) }] : [];
+      step(s, cmds);
+      for (const e of s.elevators) {
+        const load = s.passengers.filter((p) => p.state === 'riding' && p.elevatorId === e.id).reduce((a, p) => a + p.size, 0);
+        expect(load).toBeLessThanOrEqual(5);
+        expect(e.pos).toBeGreaterThanOrEqual(0);
+        expect(e.pos).toBeLessThanOrEqual(4000);
+        if (e.phase !== 'moving') expect(e.pos % 1000).toBe(0);
+      }
+    }
+    expect(s.stats.spawned).toBe(s.stats.delivered + s.stats.missed + s.passengers.length);
+    expect(s.stats.delivered).toBeGreaterThan(0);
+  });
+});

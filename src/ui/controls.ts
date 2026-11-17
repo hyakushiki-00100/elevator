@@ -19,10 +19,8 @@ export interface TapResult {
 export function handleTap(hit: Hit, state: ControlState, elevatorCount: number): TapResult {
   if (hit === null) return { state, command: null };
   if (elevatorCount <= 1) {
-    if (hit.kind === 'floor') {
-      return { state: { selected: 0 }, command: { type: 'goto', elevator: 0, floor: hit.floor } };
-    }
-    return { state: { selected: 0 }, command: null };
+    // 1基のときは、かごの上をタップしても「その位置の階」へのタップとして扱う
+    return { state: { selected: 0 }, command: { type: 'goto', elevator: 0, floor: hit.floor } };
   }
   if (hit.kind === 'elevator') {
     return { state: { selected: hit.index }, command: null };

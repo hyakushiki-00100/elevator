@@ -23,7 +23,7 @@ describe('layout / hitTest', () => {
   it('かごの上は階よりもエレベーターが優先される', () => {
     const x = l.shaftX[1]! + 10;
     const y = carTop(l, 2000) + carHeight(l) / 2;
-    expect(hitTest(l, x, y, [0, 2000])).toEqual({ kind: 'elevator', index: 1 });
+    expect(hitTest(l, x, y, [0, 2000])).toEqual({ kind: 'elevator', index: 1, floor: 2 });
     // 同じ位置でもかごがいなければ階
     expect(hitTest(l, x, y, [0, 0])).toEqual({ kind: 'floor', floor: 2 });
   });
@@ -55,12 +55,13 @@ describe('handleTap', () => {
     const r = handleTap({ kind: 'floor', floor: 3 }, { selected: null }, 1);
     expect(r.command).toEqual({ type: 'goto', elevator: 0, floor: 3 });
   });
-  it('1基: かごのタップは何もしない', () => {
-    expect(handleTap({ kind: 'elevator', index: 0 }, { selected: null }, 1).command).toBeNull();
+  it('1基: かごの上のタップは、その位置の階へのタップとして扱う(押しても反応しない場所を作らない)', () => {
+    expect(handleTap({ kind: 'elevator', index: 0, floor: 2 }, { selected: null }, 1).command)
+      .toEqual({ type: 'goto', elevator: 0, floor: 2 });
   });
   it('2基: 選択なしの階タップは無視、選択後は goto', () => {
     expect(handleTap({ kind: 'floor', floor: 2 }, { selected: null }, 2).command).toBeNull();
-    const sel = handleTap({ kind: 'elevator', index: 1 }, { selected: null }, 2);
+    const sel = handleTap({ kind: 'elevator', index: 1, floor: 0 }, { selected: null }, 2);
     expect(sel.state.selected).toBe(1);
     expect(sel.command).toBeNull();
     const go = handleTap({ kind: 'floor', floor: 4 }, sel.state, 2);
