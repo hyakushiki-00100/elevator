@@ -100,6 +100,10 @@ src/
     storage.ts      localStorage(try/catch必須)
     ads.ts          広告の窓口(公開先ごとに差し替える)
 tests/            ← simのテスト
+  bot/            ← 自動プレイボット(画面なしでsimを動かす)
+scripts/
+  screenshots.ts  ← Playwrightで各ステージの画面を撮る
+out/              ← スクリーンショットとbalance.csv(gitに入れない)
 ```
 
 ### 設計の原則
@@ -228,6 +232,31 @@ tests/            ← simのテスト
 
 **どちらも「いいえ」なら、手で操作する部分のテンポ(乗客の増え方、速度)を調整する。それでも駄目なら、企画そのものを見直す。**
 
+### 完了前の自動確認(2026-11-18 追加)
+参考: Claude がゲームを遊ぶボットを自作し、全ステージを遊ばせてスクリーンショットで確認していた事例(GIGAZINE 2026-11-17)。各作業日の終わりと公開前に、次の3つを必ず実行する。
+
+1. **自動プレイボット**(`tests/bot/`)
+   - sim は描画から独立しているので、ボットは**画面なしで** sim を直接動かす
+   - ボットの種類:
+     - `idle`: 何もしない(最低点の基準)
+     - `greedy-manual`: 手動操作の代わりに「一番近い呼び出しへ行く」を毎回選ぶ(手動プレイの代わり)
+     - `preset-rules`: 用意したルールのカードの組み合わせ数種類で自動運転
+   - 決まったシード(例: 1〜20)で、全ステージを最後まで遊ばせる
+   - 途中で例外・無限ループ・乗客の消失(人数の合計が合わない)が起きたら失敗として止める
+2. **スクリーンショットの確認**(`scripts/screenshots.ts`)
+   - Playwright(無料)でビルド済みのゲームを開き、各ステージの開始時・朝のラッシュ中・終了時の画面を `out/screenshots/` に保存
+   - Claude が画像を Read で開き、表示崩れ・文字の切れ・はみ出し・真っ黒な画面がないかを目で確かめる
+   - 横長と縦長の両方の画面サイズで撮る
+3. **数値の記録**(`out/balance.csv`)
+   - ステージ × ボット × シードごとに、点数・星の数・取りこぼし人数・平均待ち時間を記録
+   - 次のどれかに当てはまるステージは調整候補として報告する
+     - `idle` でも星1が取れる(簡単すぎる)
+     - `preset-rules` の最良でも星1が取れない(難しすぎる)
+     - シードによって点数が大きくぶれる(運の要素が強すぎる)
+   - 数値の集計は必ずコードで行う
+
+**注意**: Playwright はブラウザ本体をダウンロードする(容量が大きい)。病院の遅い回線では入れにくいので、**入院前に自宅で `npx playwright install chromium` まで済ませておく**。
+
 ---
 
 ## 7. やらないこと(範囲を広げない)
@@ -303,3 +332,4 @@ tests/            ← simのテスト
 - CrazyGames Requirements: https://docs.crazygames.com/requirements/intro/
 - CrazyGames FAQ: https://docs.crazygames.com/faq/
 - Web game monetization(Cinevva): https://app.cinevva.com/guides/web-game-monetization
+- ボットによる自動確認の事例(GIGAZINE 2026-11-17): https://gigazine.net/news/20261117-claude-made-dream-game/
