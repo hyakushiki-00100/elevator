@@ -216,3 +216,30 @@ export function iconShare(ctx: CanvasRenderingContext2D, x: number, y: number, r
   else { ctx.moveTo(x - r * 0.35, bottom - r * 0.35); ctx.lineTo(x, bottom); ctx.lineTo(x + r * 0.35, bottom - r * 0.35); }
   ctx.stroke();
 }
+
+/** スピーカー。muted なら斜線、そうでなければ音の波 */
+export function iconSpeaker(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, muted: boolean): void {
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.75, y - r * 0.3);
+  ctx.lineTo(x - r * 0.35, y - r * 0.3);
+  ctx.lineTo(x + r * 0.1, y - r * 0.7);
+  ctx.lineTo(x + r * 0.1, y + r * 0.7);
+  ctx.lineTo(x - r * 0.35, y + r * 0.3);
+  ctx.lineTo(x - r * 0.75, y + r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = muted ? '#e5484d' : '#ffffff';
+  ctx.lineWidth = Math.max(2, r * 0.15);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (muted) {
+    ctx.moveTo(x + r * 0.35, y - r * 0.35); ctx.lineTo(x + r * 0.85, y + r * 0.35);
+    ctx.moveTo(x + r * 0.85, y - r * 0.35); ctx.lineTo(x + r * 0.35, y + r * 0.35);
+  } else {
+    ctx.arc(x + r * 0.15, y, r * 0.4, -Math.PI / 4, Math.PI / 4);
+    ctx.moveTo(x + r * 0.15 + Math.cos(-Math.PI / 4) * r * 0.75, y + Math.sin(-Math.PI / 4) * r * 0.75);
+    ctx.arc(x + r * 0.15, y, r * 0.75, -Math.PI / 4, Math.PI / 4);
+  }
+  ctx.stroke();
+}

@@ -171,3 +171,6 @@ export function shareButtonHit(x: number, y: number): 'export' | 'import' | null
   if (inRect(SHARE_IMPORT_BUTTON, x, y)) return 'import';
   return null;
 }
+
+/** 消音ボタン(右のパネルの右上。どの画面でも押せる) */
+export const MUTE_BUTTON: Rect = { x: 900, y: 20, w: 36, h: 36 };

@@ -6,7 +6,7 @@ import { CARD_ORDER, type CardId } from './sim/rules.ts';
 import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './render/render.ts';
 import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
-  editorHit, hitTest, inRect, makeLayout, makeView, RETRY_BUTTON, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
+  editorHit, hitTest, inRect, makeLayout, makeView, MUTE_BUTTON, RETRY_BUTTON, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
@@ -16,6 +16,7 @@ import { browserStore, loadSave, SAVE_VERSION, writeSave, type SaveData } from '
 import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
 import { isShareDialogOpen, openShareDialog, type Feedback } from './ui/shareDialog.ts';
+import { SoundPlayer, type Sfx } from './platform/audio.ts';
 
 /**
  * 検証用の仕組み(URLの指定と window.__dev)を有効にするか。
@@ -39,6 +40,13 @@ const rulesByStage: RuleSet[] = STAGES.map((s) => fitRules([], s.building.elevat
 const bestStars: number[] = STAGES.map(() => 0);
 
 const store = browserStore();
+const sound = new SoundPlayer();
+/** 検証用: 鳴らした効果音の記録(開発サーバーと撮影用ビルドだけ) */
+const soundLog: Sfx[] = [];
+function sfx(s: Sfx): void {
+  if (DEBUG_HOOKS) soundLog.push(s);
+  sound.play(s);
+}
 /** 保存するか(検証用のURL指定で状態を変えたときは、本当の進行状況を上書きしないよう保存しない) */
 let saving = true;
 
@@ -54,6 +62,7 @@ let saving = true;
     });
     const last = STAGES.findIndex((s) => s.id === saved.lastStage);
     if (last >= 0 && last < stagesOpen(unlocked, STAGES)) stageIdx = last;
+    sound.muted = saved.muted;
   }
 }
 
@@ -72,7 +81,9 @@ if (DEBUG_HOOKS) {
 /** 進行状況を端末内に保存する(失敗しても無視。ゲームは続ける)。lastIdx は次に開いたときのステージ */
 function persist(lastIdx: number = stageIdx): void {
   if (!saving) return;
-  const data: SaveData = { version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id };
+  const data: SaveData = {
+    version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id, muted: sound.muted,
+  };
   STAGES.forEach((s, i) => {
     data.bestStars[s.id] = bestStars[i] ?? 0;
     data.rules[s.id] = (rulesByStage[i] ?? []).map((row) => [...row]);
@@ -178,9 +189,11 @@ function finishDay(): void {
   prepareProgress(openAfter > openBefore ? openAfter - 1 : null);
   persist(nextStageIdx);
   setMode('result');
+  // 結果画面の演出(星が1つずつ現れる・カードが光って現れる: render.ts の drawResult)に合わせて鳴らす
+  for (let i = 0; i < dayResult.stars; i++) setTimeout(() => sfx('star'), 250 + i * 300 + 120);
+  if (newCards.length > 0) setTimeout(() => sfx('unlock'), 1400);
 }
 
-/** 結果画面の後、次の日の準備(新しいステージが開いたら移り、カードの置き場所を用意する) */
 /**
  * 1日の終わりに、次の日の準備をしておく(結果画面のままページを閉じても、保存に反映されるように)。
  * - 新しいステージが開いたら、次の日はそこへ移る。最初は、いま遊んでいたステージの1基目の並びを全基に置いておく
@@ -214,9 +227,10 @@ const RESULT_INPUT_DELAY_MS = 700;
 /** 共有文字列を読み込んで、そのステージの枠に置く。結果を図で示すための区分を返す */
 function importShared(text: string): Feedback {
   const d = decodeShare(text);
-  if (!d.ok) return 'error';
+  if (!d.ok) { sfx('error'); return 'error'; }
   const r = applyShared(d.value, STAGES, stagesOpen(unlocked, STAGES), unlocked, slotCountFor(unlocked));
-  if (r.status !== 'ok' && r.status !== 'partial') return 'error';
+  if (r.status !== 'ok' && r.status !== 'partial') { sfx('error'); return 'error'; }
+  sfx('click');
   stageIdx = r.stageIdx;
   rulesByStage[stageIdx] = r.rules;
   newDay();
@@ -228,11 +242,13 @@ function importShared(text: string): Feedback {
 function onReadyTap(x: number, y: number): void {
   if (unlocked.length === 0) {
     // カードを持っていない最初の日は、どこをタップしても開始
+    sfx('click');
     newDay();
     setMode('playing');
     return;
   }
   const share = shareButtonHit(x, y);
+  if (share) sfx('click');
   if (share === 'export') {
     openShareDialog({ mode: 'export', code: encodeShare({ stageId: STAGES[stageIdx]!.id, rules: currentRules() }) });
     return;
@@ -243,6 +259,7 @@ function onReadyTap(x: number, y: number): void {
   }
   const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
   if (tab !== null) {
+    sfx('click');
     stageIdx = tab;
     newDay();
     persist();
@@ -252,6 +269,7 @@ function onReadyTap(x: number, y: number): void {
   const rules = currentRules();
   const hit = editorHit(x, y, rules.length, slots, unlocked.length);
   if (!hit) return;
+  sfx('click');
   if (hit.kind === 'play') {
     newDay();
     setMode('playing');
@@ -271,14 +289,23 @@ function onReadyTap(x: number, y: number): void {
 canvas.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
   if (isShareDialogOpen()) return;
+  // 音は利用者の操作の中でしか出せるようにならないので、タップのたびに準備する(2回目以降は何もしない)
+  sound.unlock();
   const rect = canvas.getBoundingClientRect();
   const p = toLogical(view, ev.clientX - rect.left, ev.clientY - rect.top);
+  if (inRect(MUTE_BUTTON, p.x, p.y)) {
+    sound.muted = !sound.muted;
+    sfx('click');
+    persist();
+    return;
+  }
   if (mode === 'ready') {
     onReadyTap(p.x, p.y);
     return;
   }
   if (mode === 'result') {
     if (performance.now() - modeSince >= RESULT_INPUT_DELAY_MS && inRect(RETRY_BUTTON, p.x, p.y)) {
+      sfx('click');
       prepareNextDay();
       setMode('ready');
     }
@@ -287,8 +314,15 @@ canvas.addEventListener('pointerdown', (ev) => {
   const hit = hitTest(layout, p.x, p.y, state.elevators.map((e) => e.pos));
   const r = handleTap(hit, control, state.elevators.length);
   control = r.state;
+  if (r.command || hit?.kind === 'elevator') {
+    // タップが届いたことを、音と波紋で返す
+    sfx('tap');
+    effects.push({ type: 'tap', floor: -1, elevator: -1, t0: performance.now(), x: p.x, y: p.y });
+  }
   if (r.command) pending.push(r.command);
 });
+
+document.addEventListener('visibilitychange', () => sound.setHidden(document.hidden));
 
 const DT = 1000 / TICKS_PER_SECOND;
 const MAX_STEPS_PER_FRAME = 5;
@@ -302,12 +336,25 @@ function frame(now: number): void {
   let steps = 0;
   while (acc >= DT) {
     prevPos = state.elevators.map((e) => e.pos);
+    const phasesBefore = state.elevators.map((e) => e.phase);
+    const timeBefore = state.phaseIndex;
     step(state, pending);
     pending = [];
     for (const ev of state.events) {
-      if (ev.type === 'delivered') effects.push({ type: 'delivered', floor: ev.floor, elevator: ev.elevator, t0: now });
-      else if (ev.type === 'missed') effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now });
+      if (ev.type === 'delivered') {
+        effects.push({ type: 'delivered', floor: ev.floor, elevator: ev.elevator, t0: now });
+        sfx('deliver');
+      } else if (ev.type === 'missed') {
+        effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now });
+        sfx('miss');
+      } else if (ev.type === 'boarded') {
+        sfx('board');
+      }
     }
+    // 扉が開いた(到着した)とき
+    state.elevators.forEach((e, i) => { if (e.phase === 'open' && phasesBefore[i] !== 'open') sfx('door'); });
+    // 時間帯が変わった(朝 → 昼 → 夕方)とき
+    if (state.phaseIndex > 0 && state.phaseIndex !== timeBefore) sfx('phase');
     acc -= DT;
     if (state.finished) {
       finishDay();
@@ -328,7 +375,7 @@ function frame(now: number): void {
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
-    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars,
+    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted,
     result: mode === 'result' ? dayResult : null,
   });
   requestAnimationFrame(frame);
@@ -344,6 +391,9 @@ if (DEBUG_HOOKS) {
     get unlocked() { return unlocked; },
     get stageIdx() { return stageIdx; },
     get result() { return dayResult; },
+    get sounds() { return soundLog; },
+    get muted() { return sound.muted; },
+    get audioState() { return sound.state; },
     addPassenger,
     /** 検証用: 時間を早送りする */
     fastForward(ticks: number) { for (let i = 0; i < ticks && !state.finished; i++) step(state); },

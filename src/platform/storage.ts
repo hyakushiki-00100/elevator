@@ -18,10 +18,12 @@ export interface SaveData {
   rules: Record<number, CardId[][]>;
   /** 最後に選んでいたステージの id */
   lastStage: number;
+  /** 音を消しているか(後から足した項目。古い保存データにはないので、ないときは false) */
+  muted: boolean;
 }
 
 export function emptySave(): SaveData {
-  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1 };
+  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false };
 }
 
 /** localStorage と同じ形の最小限の窓口(テストでは偽物を渡す) */
@@ -69,6 +71,7 @@ export function parseSave(text: string | null): SaveData | null {
   }
   const ls = raw['lastStage'];
   if (typeof ls === 'number' && Number.isInteger(ls) && ls >= 1 && ls <= 999) out.lastStage = ls;
+  out.muted = raw['muted'] === true;
   return out;
 }
 

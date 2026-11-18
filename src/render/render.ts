@@ -5,11 +5,11 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
+  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
 } from './layout.ts';
 import { drawCard, drawEmptySlot } from './cards.ts';
 import {
-  drawNumber, fillCircle, iconShare, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
+  drawNumber, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
 
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
@@ -27,13 +27,16 @@ const BAND_B = '#222735';
 const SHAFT = '#0e1015';
 const PANEL_BG = '#1a1d26';
 
-/** 演出(sim の出来事から作る。sim には影響しない) */
+/** 演出(sim の出来事やタップから作る。sim には影響しない) */
 export interface Effect {
-  type: 'delivered' | 'missed';
+  type: 'delivered' | 'missed' | 'tap';
   floor: number;
   elevator: number;
   /** 発生時刻(performance.now) */
   t0: number;
+  /** タップの波紋の位置(論理座標。type が tap のとき) */
+  x?: number;
+  y?: number;
 }
 
 export type Mode = 'ready' | 'playing' | 'result';
@@ -80,6 +83,8 @@ export interface DrawArgs {
   newCards: readonly CardId[];
   /** 1日の終わりの正式な結果(結果画面のときだけ) */
   result: DayResult | null;
+  /** 音を消しているか(消音ボタンの絵) */
+  muted: boolean;
   /** 編集画面のステージ選択: 開いているステージ数・選択中・各ステージの最高の星 */
   stagesOpen: number;
   stageIdx: number;
@@ -116,6 +121,13 @@ export function draw(a: DrawArgs): void {
     else drawEditor(ctx, a);
   }
   if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
+  // 消音ボタン(どの画面でも一番上に)
+  const mb = MUTE_BUTTON;
+  ctx.fillStyle = 'rgba(58,65,86,0.9)';
+  roundRect(ctx, mb.x, mb.y, mb.w, mb.h, 6);
+  ctx.fill();
+  iconSpeaker(ctx, mb.x + mb.w / 2, mb.y + mb.h / 2, mb.w * 0.36, a.muted);
+  drawTapRipples(ctx, a.effects, a.now);
   ctx.restore();
 
   // 縦長の画面では、上の余白に「横向きにして」の図を出す(文字は使わない。操作は妨げない)
@@ -339,6 +351,21 @@ export function doorOpen(e: Elevator, doorTicks: number): number {
 }
 
 export const EFFECT_MS = 900;
+const RIPPLE_MS = 350;
+
+/** タップした場所の波紋(押したことが目で分かるように) */
+function drawTapRipples(ctx: CanvasRenderingContext2D, effects: readonly Effect[], now: number): void {
+  for (const ef of effects) {
+    if (ef.type !== 'tap' || ef.x === undefined || ef.y === undefined) continue;
+    const t = (now - ef.t0) / RIPPLE_MS;
+    if (t < 0 || t > 1) continue;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.7 * (1 - t)).toFixed(3)})`;
+    ctx.lineWidth = 3 * (1 - t) + 1;
+    ctx.beginPath();
+    ctx.arc(ef.x, ef.y, 8 + 26 * t, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
 
 function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly Effect[], now: number): void {
   for (const ef of effects) {
@@ -346,6 +373,7 @@ function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly
     if (t < 0 || t > 1) continue;
     const y = floorTop(l, ef.floor) + l.floorH / 2 - t * 24;
     const alpha = 1 - t;
+    if (ef.type === 'tap') continue;
     if (ef.type === 'missed') {
       iconCross(ctx, l.queueLeft + 14, y, 11, alpha);
     } else {

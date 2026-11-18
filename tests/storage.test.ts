@@ -19,6 +19,7 @@ const sample: SaveData = {
   bestStars: { 1: 3, 2: 1 },
   rules: { 1: [['sameDir', 'nearest']], 2: [['nearest'], ['express', 'nearest']] },
   lastStage: 2,
+  muted: true,
 };
 
 describe('進行状況の保存', () => {
@@ -70,6 +71,12 @@ describe('進行状況の保存', () => {
     const d = parseSave(text)!;
     expect(d.rules[1]![0]).toHaveLength(5);
     expect(d.rules[2]).toBeUndefined();
+  });
+
+  it('消音の設定がない古い保存データは「音あり」として読む(版は上げない)', () => {
+    const old = JSON.stringify({ version: SAVE_VERSION, unlocked: ['nearest'], bestStars: {}, rules: {}, lastStage: 1 });
+    expect(parseSave(old)!.muted).toBe(false);
+    expect(parseSave(JSON.stringify({ ...sample, muted: 'yes' }))!.muted).toBe(false);
   });
 
   it('空の保存データは、そのまま読み戻せる', () => {
