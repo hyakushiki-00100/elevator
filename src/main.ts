@@ -12,6 +12,7 @@ import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
+import { browserStore, loadSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 
 /**
  * 検証用の仕組み(URLの指定と window.__dev)を有効にするか。
@@ -24,7 +25,7 @@ const canvas = document.createElement('canvas');
 document.getElementById('app')!.append(canvas);
 const ctx = canvas.getContext('2d')!;
 
-// ---- 進行状況(保存は8〜9日目。今はページを開き直すと最初から) ----
+// ---- 進行状況(端末内に保存する: platform/storage.ts) ----
 /** 手に入れたカード */
 let unlocked: CardId[] = [];
 /** 選択中のステージ(STAGES の添字) */
@@ -33,6 +34,25 @@ let stageIdx = 0;
 const rulesByStage: RuleSet[] = STAGES.map((s) => fitRules([], s.building.elevators, 0, []));
 /** ステージごとの最高の星 */
 const bestStars: number[] = STAGES.map(() => 0);
+
+const store = browserStore();
+/** 保存するか(検証用のURL指定で状態を変えたときは、本当の進行状況を上書きしないよう保存しない) */
+let saving = true;
+
+// 保存された進行状況を読み込む(なければ・壊れていれば最初から)
+{
+  const saved = loadSave(store);
+  if (saved) {
+    unlocked = saved.unlocked;
+    STAGES.forEach((s, i) => {
+      bestStars[i] = saved.bestStars[s.id] ?? 0;
+      const r = saved.rules[s.id];
+      if (r) rulesByStage[i] = r.map((row) => [...row]);
+    });
+    const last = STAGES.findIndex((s) => s.id === saved.lastStage);
+    if (last >= 0 && last < stagesOpen(unlocked, STAGES)) stageIdx = last;
+  }
+}
 
 // 検証時だけ、URLで状態を変えて確認できる(例: ?cards=all&stage=2&elevators=3)。本番ビルドでは無効。
 let devBuilding: { floors?: number; elevators?: number } = {};
@@ -43,6 +63,18 @@ if (DEBUG_HOOKS) {
   if (q.get('cards') === 'all') unlocked = [...CARD_ORDER];
   const st = num('stage');
   if (st !== undefined && st >= 1 && st <= STAGES.length) stageIdx = st - 1;
+  if (['cards', 'stage', 'floors', 'elevators'].some((k) => q.has(k))) saving = false;
+}
+
+/** 進行状況を端末内に保存する(失敗しても無視。ゲームは続ける)。lastIdx は次に開いたときのステージ */
+function persist(lastIdx: number = stageIdx): void {
+  if (!saving) return;
+  const data: SaveData = { version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id };
+  STAGES.forEach((s, i) => {
+    data.bestStars[s.id] = bestStars[i] ?? 0;
+    data.rules[s.id] = (rulesByStage[i] ?? []).map((row) => [...row]);
+  });
+  writeSave(store, data);
 }
 
 function stage(): Stage {
@@ -64,8 +96,8 @@ function currentRules(): RuleSet {
 
 let editRow = 0;
 let newCards: CardId[] = [];
-/** この日の終わりに新しく開いたステージ(なければ null) */
-let newStage: number | null = null;
+/** 次の日に遊ぶステージ(1日の終わりに決めて保存する。結果画面の「やり直し」で移る) */
+let nextStageIdx = 0;
 /** 1日の終わりの正式な結果 */
 let dayResult: DayResult | null = null;
 
@@ -140,25 +172,35 @@ function finishDay(): void {
   newCards = nextUnlock(unlocked);
   unlocked = [...unlocked, ...newCards];
   const openAfter = stagesOpen(unlocked, STAGES);
-  newStage = openAfter > openBefore ? openAfter - 1 : null;
+  prepareProgress(openAfter > openBefore ? openAfter - 1 : null);
+  persist(nextStageIdx);
   setMode('result');
 }
 
 /** 結果画面の後、次の日の準備(新しいステージが開いたら移り、カードの置き場所を用意する) */
-function prepareNextDay(): void {
-  if (newStage !== null) {
-    // 新しく開いたステージへ移る。最初は、いま遊んでいたステージの1基目の並びを全基に置いておく
+/**
+ * 1日の終わりに、次の日の準備をしておく(結果画面のままページを閉じても、保存に反映されるように)。
+ * - 新しいステージが開いたら、次の日はそこへ移る。最初は、いま遊んでいたステージの1基目の並びを全基に置いておく
+ * - 初めてカードを手に入れたら、最初の枠に置いておく(置き方を図で示す代わり)
+ */
+function prepareProgress(openedStage: number | null): void {
+  nextStageIdx = stageIdx;
+  if (openedStage !== null) {
     const prev = rulesByStage[stageIdx]?.[0] ?? [];
-    stageIdx = newStage;
-    rulesByStage[stageIdx] = Array.from({ length: stage().building.elevators }, () => [...prev]);
-    newStage = null;
+    nextStageIdx = openedStage;
+    rulesByStage[nextStageIdx] = Array.from({ length: STAGES[nextStageIdx]!.building.elevators }, () => [...prev]);
   }
-  let rules = currentRules();
-  // 初めてカードを手に入れたら、最初の枠に置いておく(置き方を図で示す代わり)
-  if (newCards.length > 0 && rules.every((r) => r.length === 0)) {
-    rules = rules.map((r) => [...r, newCards[0]!]);
+  const target = rulesByStage[nextStageIdx] ?? [];
+  if (newCards.length > 0 && target.every((r) => r.length === 0)) {
+    const n = STAGES[nextStageIdx]!.building.elevators;
+    rulesByStage[nextStageIdx] = Array.from({ length: n }, () => [newCards[0]!]);
   }
-  rulesByStage[stageIdx] = rules;
+}
+
+/** 結果画面の「やり直し」: 準備しておいた次の日へ */
+function prepareNextDay(): void {
+  stageIdx = nextStageIdx;
+  rulesByStage[stageIdx] = currentRules();
   newCards = [];
   newDay();
 }
@@ -177,6 +219,7 @@ function onReadyTap(x: number, y: number): void {
   if (tab !== null) {
     stageIdx = tab;
     newDay();
+    persist();
     return;
   }
   const slots = slotCountFor(unlocked);
@@ -192,8 +235,10 @@ function onReadyTap(x: number, y: number): void {
   else if (hit.kind === 'slot') {
     editRow = hit.row;
     rulesByStage[stageIdx] = removeCard(rules, hit.row, hit.index);
+    persist();
   } else {
     rulesByStage[stageIdx] = placeCard(rules, editRow, unlocked[hit.index]!, slots);
+    persist();
   }
 }
 
