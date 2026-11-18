@@ -13,6 +13,11 @@ export function drawNumber(
   ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color: string,
   align: CanvasTextAlign = 'center',
 ): void {
+  // 7セグメント表示(テーマ led)。数字と小数点だけの文字列で、ある程度大きいときに使う(小さいとつぶれるため)
+  if (theme().segment && size >= 14 && /^[0-9.]+$/.test(text)) {
+    drawSegments(ctx, text, x, y, size, color, align);
+    return;
+  }
   ctx.font = `bold ${size}px ${theme().font}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
@@ -243,4 +248,65 @@ export function iconSpeaker(ctx: CanvasRenderingContext2D, x: number, y: number,
     ctx.arc(x + r * 0.15, y, r * 0.75, -Math.PI / 4, Math.PI / 4);
   }
   ctx.stroke();
+}
+
+/**
+ * 7セグメント表示の数字(電卓・古い階数表示のような数字)。各数字で点灯する線 a〜g:
+ *  aaa
+ * f   b
+ *  ggg
+ * e   c
+ *  ddd
+ */
+const SEGMENTS: Record<string, string> = {
+  '0': 'abcdef', '1': 'bc', '2': 'abdeg', '3': 'abcdg', '4': 'bcfg',
+  '5': 'acdfg', '6': 'acdefg', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg',
+};
+
+function drawSegments(
+  ctx: CanvasRenderingContext2D, text: string, x: number, baseline: number, size: number, color: string, align: CanvasTextAlign,
+): void {
+  const h = size * 0.9;           // 数字の高さ
+  const w = size * 0.52;          // 数字の幅
+  const gap = size * 0.14;        // 数字の間
+  const t = Math.max(1.5, size * 0.11); // 線の太さ
+  const dotW = size * 0.22;
+  let total = 0;
+  for (const ch of text) total += ch === '.' ? dotW : w + gap;
+  total -= gap;
+  let cx = align === 'center' ? x - total / 2 : align === 'right' || align === 'end' ? x - total : x;
+  const top = baseline - h;
+  const seg = (x0: number, y0: number, x1: number, y1: number, on: boolean): void => {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = on ? 1 : 0.08; // 消えている線もうっすら見せる(本物の表示器のように)
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  };
+  ctx.save();
+  ctx.lineWidth = t;
+  ctx.lineCap = 'round';
+  for (const ch of text) {
+    if (ch === '.') {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(cx + dotW / 2 - gap / 2, baseline - t / 2, t * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      cx += dotW;
+      continue;
+    }
+    const on = SEGMENTS[ch] ?? '';
+    const l = cx + t / 2, r = cx + w - t / 2, mid = top + h / 2;
+    seg(l + t * 0.4, top, r - t * 0.4, top, on.includes('a'));
+    seg(r, top + t * 0.4, r, mid - t * 0.4, on.includes('b'));
+    seg(r, mid + t * 0.4, r, baseline - t * 0.4, on.includes('c'));
+    seg(l + t * 0.4, baseline, r - t * 0.4, baseline, on.includes('d'));
+    seg(l, mid + t * 0.4, l, baseline - t * 0.4, on.includes('e'));
+    seg(l, top + t * 0.4, l, mid - t * 0.4, on.includes('f'));
+    seg(l + t * 0.4, mid, r - t * 0.4, mid, on.includes('g'));
+    cx += w + gap;
+  }
+  ctx.restore();
 }

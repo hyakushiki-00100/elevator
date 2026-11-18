@@ -192,7 +192,7 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
     ctx.fillStyle = floorColor(f);
     ctx.fillRect(0, y, 8, l.floorH);
     const numColor = T().floorNumber ?? floorColor(f);
-    if (T().metal) { ctx.shadowColor = numColor; ctx.shadowBlur = 8; }
+    if (T().glow > 0) { ctx.shadowColor = numColor; ctx.shadowBlur = T().glow; }
     drawNumber(ctx, String(f + 1), 26, y + l.floorH - 14, 18, numColor);
     ctx.shadowBlur = 0;
     // 床の線
@@ -355,16 +355,17 @@ export function doorOpen(e: Elevator, doorTicks: number): number {
  * w=0 で vertical のときは y〜y+h の縦のグラデーション
  */
 function metalGradient(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, base: string, vertical = false): CanvasGradient {
+  const k = T().metalStrength;
   const g = vertical ? ctx.createLinearGradient(0, y, 0, y + h) : ctx.createLinearGradient(x, y, x + w, y);
   if (vertical) {
-    g.addColorStop(0, shade(base, 18));
-    g.addColorStop(1, shade(base, -10));
+    g.addColorStop(0, shade(base, 18 * k));
+    g.addColorStop(1, shade(base, -10 * k));
   } else {
-    g.addColorStop(0, shade(base, -14));
-    g.addColorStop(0.35, shade(base, 16));
-    g.addColorStop(0.5, shade(base, 4));
-    g.addColorStop(0.7, shade(base, 14));
-    g.addColorStop(1, shade(base, -14));
+    g.addColorStop(0, shade(base, -14 * k));
+    g.addColorStop(0.35, shade(base, 16 * k));
+    g.addColorStop(0.5, shade(base, 4 * k));
+    g.addColorStop(0.7, shade(base, 14 * k));
+    g.addColorStop(1, shade(base, -14 * k));
   }
   return g;
 }
@@ -457,7 +458,9 @@ function drawPanel(
   y += 70;
   ctx.fillStyle = T().floorLine;
   ctx.fillRect(PANEL_X + 20, y - 34, PANEL_W - 40, 2);
+  if (T().glow > 0) { ctx.shadowColor = T().accent; ctx.shadowBlur = T().glow; }
   drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, y + 16, 40, T().accent);
+  ctx.shadowBlur = 0;
   y += 56;
   for (let i = 0; i < 3; i++) {
     iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 46, y, 17, sc.score >= th[i]!);
