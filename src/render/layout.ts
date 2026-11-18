@@ -161,3 +161,13 @@ export function stageTabHit(x: number, y: number, stages: number): number | null
   for (let i = 0; i < stages; i++) if (inRect(stageTabRect(i), x, y)) return i;
   return null;
 }
+
+/** ルールの共有ボタン(編集画面の下段、ステージの選択ボタンと開始ボタンの間) */
+export const SHARE_EXPORT_BUTTON: Rect = { x: 540, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 40, h: 40 };
+export const SHARE_IMPORT_BUTTON: Rect = { x: 588, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 40, h: 40 };
+
+export function shareButtonHit(x: number, y: number): 'export' | 'import' | null {
+  if (inRect(SHARE_EXPORT_BUTTON, x, y)) return 'export';
+  if (inRect(SHARE_IMPORT_BUTTON, x, y)) return 'import';
+  return null;
+}

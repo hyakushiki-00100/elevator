@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_ORDER } from '../src/sim/rules.ts';
 import { STAGES } from '../src/sim/stages.ts';
-import { EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, slotRect, stageTabHit, stageTabRect } from '../src/render/layout.ts';
+import {
+  EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, shareButtonHit,
+  slotRect, stageTabHit, stageTabRect,
+} from '../src/render/layout.ts';
 import { fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
 
 describe('カードの編集(純粋な関数)', () => {
@@ -66,6 +69,9 @@ describe('編集画面の当たり判定', () => {
     expect(editorHit(...c(rowButtonRect(1, 3)), 2, 3, 3)).toEqual({ kind: 'row', row: 1 });
     expect(editorHit(5, 5, 1, 3, 3)).toBeNull();
     expect(stageTabHit(...c(stageTabRect(1)), 2)).toBe(1);
+    expect(shareButtonHit(...c(SHARE_EXPORT_BUTTON))).toBe('export');
+    expect(shareButtonHit(...c(SHARE_IMPORT_BUTTON))).toBe('import');
+    expect(shareButtonHit(...c(EDITOR_PLAY))).toBeNull();
     expect(stageTabHit(...c(stageTabRect(0)), 1)).toBeNull(); // 1つしか開いていなければ出さない
   });
 
@@ -74,7 +80,7 @@ describe('編集画面の当たり判定', () => {
     const rects = [
       ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i, 5))),
       ...Array.from({ length: n }, (_, i) => handRect(i, n, 2)),
-      rowButtonRect(0, 5), rowButtonRect(1, 5), EDITOR_PLAY,
+      rowButtonRect(0, 5), rowButtonRect(1, 5), EDITOR_PLAY, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
       // ステージの選択ボタン: 今のステージ数 + 1 つ分の余裕
       ...Array.from({ length: STAGES.length + 1 }, (_, i) => stageTabRect(i)),
     ];

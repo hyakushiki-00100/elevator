@@ -5,11 +5,11 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  RETRY_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
+  RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
 } from './layout.ts';
 import { drawCard, drawEmptySlot } from './cards.ts';
 import {
-  drawNumber, fillCircle, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
+  drawNumber, fillCircle, iconShare, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
 
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
@@ -528,6 +528,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   ctx.moveTo(480, hr.y - 26); ctx.lineTo(490, hr.y - 14); ctx.lineTo(470, hr.y - 14);
   ctx.closePath();
   ctx.fill();
+
+  // ルールの共有(書き出し・読み込み)
+  for (const [b, dir] of [[SHARE_EXPORT_BUTTON, 'out'], [SHARE_IMPORT_BUTTON, 'in']] as const) {
+    ctx.fillStyle = '#3a4156';
+    roundRect(ctx, b.x, b.y, b.w, b.h, 6);
+    ctx.fill();
+    iconShare(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w * 0.32, dir);
+  }
 
   // ステージの選択(2つ以上開いているとき)。番号と、その下に最高の星
   if (a.stagesOpen > 1) {

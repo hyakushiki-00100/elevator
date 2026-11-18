@@ -6,13 +6,16 @@ import { CARD_ORDER, type CardId } from './sim/rules.ts';
 import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './render/render.ts';
 import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
-  editorHit, hitTest, inRect, makeLayout, makeView, RETRY_BUTTON, stageTabHit, toLogical, type Layout, type View,
+  editorHit, hitTest, inRect, makeLayout, makeView, RETRY_BUTTON, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
 import { browserStore, loadSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
+import { decodeShare, encodeShare } from './share/codec.ts';
+import { applyShared } from './share/apply.ts';
+import { isShareDialogOpen, openShareDialog, type Feedback } from './ui/shareDialog.ts';
 
 /**
  * 検証用の仕組み(URLの指定と window.__dev)を有効にするか。
@@ -208,11 +211,34 @@ function prepareNextDay(): void {
 /** 結果画面が出た直後の誤タップでやり直さないための待ち時間 */
 const RESULT_INPUT_DELAY_MS = 700;
 
+/** 共有文字列を読み込んで、そのステージの枠に置く。結果を図で示すための区分を返す */
+function importShared(text: string): Feedback {
+  const d = decodeShare(text);
+  if (!d.ok) return 'error';
+  const r = applyShared(d.value, STAGES, stagesOpen(unlocked, STAGES), unlocked, slotCountFor(unlocked));
+  if (r.status !== 'ok' && r.status !== 'partial') return 'error';
+  stageIdx = r.stageIdx;
+  rulesByStage[stageIdx] = r.rules;
+  newDay();
+  setMode('ready');
+  persist();
+  return r.status;
+}
+
 function onReadyTap(x: number, y: number): void {
   if (unlocked.length === 0) {
     // カードを持っていない最初の日は、どこをタップしても開始
     newDay();
     setMode('playing');
+    return;
+  }
+  const share = shareButtonHit(x, y);
+  if (share === 'export') {
+    openShareDialog({ mode: 'export', code: encodeShare({ stageId: STAGES[stageIdx]!.id, rules: currentRules() }) });
+    return;
+  }
+  if (share === 'import') {
+    openShareDialog({ mode: 'import', onSubmit: importShared });
     return;
   }
   const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
@@ -244,6 +270,7 @@ function onReadyTap(x: number, y: number): void {
 
 canvas.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
+  if (isShareDialogOpen()) return;
   const rect = canvas.getBoundingClientRect();
   const p = toLogical(view, ev.clientX - rect.left, ev.clientY - rect.top);
   if (mode === 'ready') {
@@ -328,4 +355,20 @@ if (DEBUG_HOOKS) {
     /** 検証用: 編集画面・最初の画面から1日を始める */
     start() { newDay(); setMode('playing'); },
   };
+}
+
+// 共有のリンク(?r=EV1-...)で開かれたら、そのルールを読み込む(結果は共有の窓に図で示す)
+{
+  const params = new URLSearchParams(location.search);
+  const code = params.get('r');
+  if (code) {
+    params.delete('r');
+    const rest = params.toString();
+    try {
+      history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+    } catch {
+      // URL を書き換えられない環境(一部の iframe など)では、そのままにする
+    }
+    openShareDialog({ mode: 'import', onSubmit: importShared, initial: code, autoSubmit: true });
+  }
 }

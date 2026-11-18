@@ -194,3 +194,25 @@ export function iconFinger(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.fillStyle = color;
   ctx.fillRect(x - r * 0.42, y - r * 0.35, r * 0.84, r * 1.1);
 }
+
+/** 共有(書き出し・読み込み): 箱と、外へ出る(上向き)/中へ入る(下向き)矢印 */
+export function iconShare(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, dir: 'out' | 'in'): void {
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(2, r * 0.16);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // 箱(上が開いている)
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.75, y - r * 0.05);
+  ctx.lineTo(x - r * 0.75, y + r * 0.75);
+  ctx.lineTo(x + r * 0.75, y + r * 0.75);
+  ctx.lineTo(x + r * 0.75, y - r * 0.05);
+  ctx.stroke();
+  // 矢印
+  const top = y - r * 0.85, bottom = y + r * 0.35;
+  ctx.beginPath();
+  ctx.moveTo(x, top); ctx.lineTo(x, bottom);
+  if (dir === 'out') { ctx.moveTo(x - r * 0.35, top + r * 0.35); ctx.lineTo(x, top); ctx.lineTo(x + r * 0.35, top + r * 0.35); }
+  else { ctx.moveTo(x - r * 0.35, bottom - r * 0.35); ctx.lineTo(x, bottom); ctx.lineTo(x + r * 0.35, bottom - r * 0.35); }
+  ctx.stroke();
+}
