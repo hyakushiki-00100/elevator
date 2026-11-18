@@ -14,10 +14,9 @@ const SINGLES: [string, CardId[]][] = [
   ['近い', ['nearest']],
   ['同方向>近い', ['sameDir', 'nearest']],
   ['近い>同方向', ['nearest', 'sameDir']],
-  ['限界>近い', ['urgent', 'nearest']],
-  ['同方向>限界>近い', ['sameDir', 'urgent', 'nearest']],
-  ['近い>1階', ['nearest', 'home']],
-  ['同方向>近い>1階', ['sameDir', 'nearest', 'home']],
+  ['急行>近い', ['express', 'nearest']],
+  ['急行>同方向>近い', ['express', 'sameDir', 'nearest']],
+  ['同方向>近い>急行', ['sameDir', 'nearest', 'express']],
 ];
 
 export function presetsFor(elevators: number): Preset[] {
@@ -28,7 +27,8 @@ export function presetsFor(elevators: number): Preset[] {
     out.push(
       { name: 'ゾーン+近い', rules: [['zoneLow', 'nearest'], ['zoneHigh', 'nearest'], ...rest(['nearest'])] },
       { name: 'ゾーン+同方向>近い', rules: [['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest'], ...rest(['sameDir', 'nearest'])] },
-      { name: 'ゾーン+近い>1階', rules: [['zoneLow', 'nearest', 'home'], ['zoneHigh', 'nearest', 'home'], ...rest(['nearest', 'home'])] },
+      { name: 'ゾーン+急行>近い', rules: [['zoneLow', 'express', 'nearest'], ['zoneHigh', 'express', 'nearest'], ...rest(['express', 'nearest'])] },
+      { name: '1号機だけ急行>近い', rules: [['express', 'nearest'], ['nearest'], ...rest(['nearest'])] },
       { name: '下層のみゾーン', rules: [['zoneLow', 'nearest'], ['nearest'], ...rest(['nearest'])] },
     );
   }

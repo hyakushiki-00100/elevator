@@ -12,8 +12,6 @@ function ctx(over: Partial<RuleContext> & { floors?: number } = {}): RuleContext
     floors,
     heading: 1,
     hall: new Array(floors).fill(false),
-    remain: new Array(floors).fill(Infinity),
-    urgent: new Array(floors).fill(false),
     car: new Array(floors).fill(false),
     includeCur: false,
     ...over,
@@ -39,24 +37,19 @@ describe('カード単体の判断', () => {
     expect(CARDS.sameDir(ctx({ hall: set(6, [1]), heading: -1 }))).toBe(1);
   });
 
-  it('限界が近い人を優先: 我慢が半分を切った人の階のうち残りが一番少ない階。いなければ当てはまらない', () => {
-    const remain = [Infinity, 100, Infinity, Infinity, 40, Infinity];
-    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1, 4]), remain }))).toBe(4);
-    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1]), remain }))).toBe(1);
-    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), remain }))).toBeNull();
-    const tie = [Infinity, 50, Infinity, Infinity, 50, Infinity];
-    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1, 4]), remain: tie }))).toBe(1); // 同じなら近い階
+  it('空なら急行で1階へ: 乗っている人がいなければ、呼ばれていても1階へ。1階にいる・乗っている人がいれば当てはまらない', () => {
+    expect(CARDS.express(ctx())).toBe(0);
+    expect(CARDS.express(ctx({ hall: set(6, [4]) }))).toBe(0);
+    expect(CARDS.express(ctx({ car: set(6, [4]) }))).toBeNull();
+    expect(CARDS.express(ctx({ cur: 0, hall: set(6, [4]) }))).toBeNull();
   });
 
   it('待機中(includeCur)なら、今いる階の乗れる人が最優先。扉が閉まった直後は今いる階を選ばない', () => {
-    const c = { hall: set(6, [2, 3]), urgent: set(6, [2, 3]), remain: [Infinity, Infinity, 50, 10, Infinity, Infinity] };
-    // 限界が近い人を優先するカードは、残りが少ない人(3階)を選ぶ。1階で待つ・担当範囲は呼び出しがあれば当てはまらない
+    const c = { hall: set(6, [2, 3]) };
     for (const id of ['nearest', 'sameDir'] as const) {
       expect(CARDS[id](ctx({ ...c, includeCur: true }))).toBe(2);
       expect(CARDS[id](ctx({ ...c, includeCur: false }))).toBe(3);
     }
-    expect(CARDS.urgent(ctx({ ...c, includeCur: true }))).toBe(3);
-    expect(CARDS.urgent(ctx({ ...c, includeCur: false }))).toBe(3);
   });
 });
 
@@ -69,14 +62,7 @@ function runUntil(s: SimState, pred: () => boolean, max = 3000): number {
   return n;
 }
 
-describe('追加のカード(1階で待つ・担当範囲)', () => {
-  it('1階で待つ: 呼び出しが何もないときだけ1階へ。1階にいれば当てはまらない', () => {
-    expect(CARDS.home(ctx())).toBe(0);
-    expect(CARDS.home(ctx({ hall: set(6, [4]) }))).toBeNull();
-    expect(CARDS.home(ctx({ car: set(6, [4]) }))).toBeNull();
-    expect(CARDS.home(ctx({ cur: 0 }))).toBeNull();
-  });
-
+describe('追加のカード(空なら急行で1階へ・担当範囲)', () => {
   it('担当範囲: 1階はどちらにも入る。7階建てなら下層=1〜4階、上層=1階と5〜7階', () => {
     const low = [0, 1, 2, 3, 4, 5, 6].filter((f) => inZone('zoneLow', f, 7));
     const high = [0, 1, 2, 3, 4, 5, 6].filter((f) => inZone('zoneHigh', f, 7));
@@ -100,18 +86,19 @@ describe('追加のカード(1階で待つ・担当範囲)', () => {
     expect(rider.state).toBe('arrived');
   });
 
-  it('1階で待つ: 用事がなくなると1階へ戻り、戻る途中の待っている人も拾う', () => {
-    const s = createSim({ building: makeBuilding({ floors: 7 }), traffic: makeTraffic({ ratePerTick: 0 }), rules: [['nearest', 'home']] }, 1);
+  it('空なら急行で1階へ: 降ろし終えると1階へ戻り、戻る途中の待っている人には止まらない', () => {
+    const s = createSim({ building: makeBuilding({ floors: 7 }), traffic: makeTraffic({ ratePerTick: 0 }), rules: [['express', 'nearest']] }, 1);
     const e = s.elevators[0]!;
-    step(s, [{ type: 'goto', elevator: 0, floor: 5 }]);
-    runUntil(s, () => e.phase === 'open' && e.pos === 5000);
+    const rider = addPassenger(s, 0, 5); // 1階から6階へ
+    runUntil(s, () => rider.state === 'arrived');
     runUntil(s, () => e.phase === 'moving');
     expect(e.target).toBe(0);
-    expect(e.tripCard).toBe('home');
-    const p = addPassenger(s, 2, 6);
+    expect(e.tripCard).toBe('express');
+    const p = addPassenger(s, 2, 6);     // 途中の3階で待つ人
     const opened: number[] = [];
-    runUntil(s, () => { if (e.phase === 'open') opened.push(e.pos); return p.state !== 'waiting'; });
-    expect(opened[0]).toBe(2000);
+    runUntil(s, () => { if (e.phase === 'open' && opened[opened.length - 1] !== e.pos) opened.push(e.pos); return p.state !== 'waiting'; });
+    expect(opened[0]).toBe(0);           // 3階を通り過ぎて、まず1階に着く
+    expect(p.state).toBe('riding');      // その後、近い呼び出しへ で迎えに行く
   });
 });
 
@@ -163,17 +150,23 @@ describe('ルールで動くエレベーター', () => {
     }
   });
 
-  it('乗っている人の降りる階は、カードに関係なく途中で必ず止まる', () => {
-    const s = sim([['urgent']]);
+  it('乗っている人の降りる階は、カードに関係なく途中で必ず止まる(安全装置)', () => {
+    // 今のカードはどれも降りる階を行き先の候補に入れるので、通常はこの状況にならない。
+    // 行き詰まり防止の安全装置として、状態を直接作って確かめる。
+    const s = sim([['sameDir']]);
     const e = s.elevators[0]!;
-    addPassenger(s, 0, 1); // 乗ったら2階で降りたい
-    step(s);              // 1階で扉を開けて乗せる
-    runUntil(s, () => e.phase !== 'open');
-    addPassenger(s, 4, 0); // 5階で長く待つ人
-    // 4階へ向かう途中で 2階に止まって降ろす
+    addPassenger(s, 4, 0);  // 5階で待つ人 → 5階へ向かって動き出す
+    step(s);
+    expect(e.phase).toBe('moving');
+    expect(e.target).toBe(4);
+    const rider = addPassenger(s, 0, 1);
+    rider.state = 'riding';
+    rider.elevatorId = 0;
+    e.stops[1] = true;      // 2階で降りたい人が乗っている状態にする
     const opened: number[] = [];
     runUntil(s, () => { if (e.phase === 'open') opened.push(e.pos); return e.pos === 4000; });
     expect(opened).toContain(1000);
+    expect(rider.state).toBe('arrived');
   });
 
   it('手動の指示はルールより優先され、途中の階には止まらない', () => {
@@ -205,7 +198,7 @@ describe('ルールで動くエレベーター', () => {
 });
 
 describe('ルールでの長時間運転(不変条件)', () => {
-  const combos: CardId[][] = [['nearest'], ['sameDir'], ['urgent'], ['sameDir', 'nearest'], ['urgent', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'home', 'urgent']];
+  const combos: CardId[][] = [['nearest'], ['sameDir'], ['express'], ['sameDir', 'nearest'], ['express', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'express'], ['zoneHigh', 'express']];
   for (const rs of combos) {
     it(`[${rs.join(',')}] 2基: 定員超過なし・乗った人は60秒以内に降りる・決定的`, () => {
       const run = () => {

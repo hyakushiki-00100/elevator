@@ -95,15 +95,25 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, [['nearest']]).stars).toBe(2);
   });
 
-  it('ステージ2: 2基をきちんと自動化すれば3★。「限界が近い人を優先」を上に置くと届かない', () => {
+  it('ステージ2: 2基をきちんと自動化すれば3★。両方に「急行」を上に置くと届かない', () => {
     const st = STAGES[1]!;
     expect(rateRules(st, both(['nearest'])).stars).toBe(3);
     expect(rateRules(st, both(['sameDir', 'nearest'])).stars).toBe(3);
-    expect(rateRules(st, both(['urgent', 'nearest'])).stars).toBeLessThan(3);
+    expect(rateRules(st, both(['express', 'nearest'])).stars).toBeLessThan(3);
   });
 
-  it('ステージ3: 担当範囲のカードで下層・上層に分けると3★。分けないと届かない(差は8%以上)', () => {
+  it('ステージ3: 「空なら急行で1階へ」を「近い」の上に置くと3★。置かないと届かない', () => {
     const st = STAGES[2]!;
+    const ex = rateRules(st, [['express', 'nearest']]);
+    const plain = rateRules(st, [['nearest']]);
+    expect(ex.stars).toBe(3);
+    expect(plain.stars).toBeLessThan(3);
+    expect(rateRules(st, [['sameDir', 'nearest']]).stars).toBeLessThan(3);
+    expect(ex.score / plain.score).toBeGreaterThan(1.02);
+  });
+
+  it('ステージ4: 担当範囲のカードで下層・上層に分けると3★。分けないと届かない(差は8%以上)', () => {
+    const st = STAGES[3]!;
     const zone = rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]);
     const plain = rateRules(st, both(['nearest']));
     expect(zone.stars).toBe(3);

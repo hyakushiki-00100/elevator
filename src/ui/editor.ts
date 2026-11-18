@@ -34,8 +34,7 @@ export function fitRules(rules: RuleSet, elevators: number, slotCount: number, u
 export const UNLOCK_STEPS: readonly (readonly CardId[])[] = [
   ['nearest'],
   ['sameDir'],
-  ['urgent'],
-  ['home'],
+  ['express'],
   ['zoneLow', 'zoneHigh'],
 ];
 

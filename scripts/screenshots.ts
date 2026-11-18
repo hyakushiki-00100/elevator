@@ -44,7 +44,8 @@ const VIEWPORTS = [
 const RULES_FOR_STAGE: Record<number, CardId[][]> = {
   1: [['sameDir', 'nearest']],
   2: [['nearest'], ['nearest']],
-  3: [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']],
+  3: [['express', 'nearest']],
+  4: [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']],
 };
 
 /** 朝のラッシュ中として撮る時刻(tick)。朝の時間帯の終わり近く */

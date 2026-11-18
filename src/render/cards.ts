@@ -6,8 +6,7 @@ import { fillCircle, roundRect } from './icons.ts';
 export const CARD_COLORS: Record<CardId, string> = {
   nearest: '#249e91',
   sameDir: '#d9782f',
-  urgent: '#7d5ccc',
-  home: '#3b7fd1',
+  express: '#c4473a',
   zoneLow: '#55607a',
   zoneHigh: '#55607a',
 };
@@ -61,16 +60,21 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
       ctx.lineTo(cx + 12 * s, yy + 6 * s);
       ctx.stroke();
     }
-  } else if (card === 'home') {
-    // 1階(太い床)へ向かう下向き矢印
-    ctx.fillRect(cx - 18 * s, cy + 18 * s, 36 * s, 5 * s);
+  } else if (card === 'express') {
+    // 1階(太い床)へまっすぐ下る二重の矢印(途中に止まらない)
+    ctx.fillRect(cx - 18 * s, cy + 20 * s, 36 * s, 5 * s);
     ctx.lineWidth = 4 * s;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 20 * s); ctx.lineTo(cx, cy + 8 * s);
+    ctx.moveTo(cx, cy - 22 * s); ctx.lineTo(cx, cy + 12 * s);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - 10 * s, cy - 1 * s); ctx.lineTo(cx, cy + 10 * s); ctx.lineTo(cx + 10 * s, cy - 1 * s);
-    ctx.stroke();
+    for (const dy of [-2, 9]) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 10 * s, cy + (dy - 9) * s); ctx.lineTo(cx, cy + dy * s); ctx.lineTo(cx + 10 * s, cy + (dy - 9) * s);
+      ctx.stroke();
+    }
+    // 空のかご(小さな四角の枠)
+    ctx.lineWidth = 2 * s;
+    ctx.strokeRect(cx + 12 * s, cy - 22 * s, 10 * s, 12 * s);
   } else if (card === 'zoneLow' || card === 'zoneHigh') {
     // 小さな建物(5階)。担当する階を明るく、それ以外を暗く。1階はどちらも担当
     const bw = 26 * s, fh = 8 * s, gap = 1.5 * s;
@@ -90,19 +94,6 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
     ctx.moveTo(cx + bw / 2 + 6 * s, y0); ctx.lineTo(cx + bw / 2 + 9 * s, y0);
     ctx.lineTo(cx + bw / 2 + 9 * s, y1); ctx.lineTo(cx + bw / 2 + 6 * s, y1);
     ctx.stroke();
-  } else {
-    // 砂時計
-    ctx.lineWidth = 3 * s;
-    const hw = 12 * s, hh = 18 * s;
-    ctx.beginPath();
-    ctx.moveTo(cx - hw, cy - hh); ctx.lineTo(cx + hw, cy - hh);
-    ctx.lineTo(cx - hw, cy + hh); ctx.lineTo(cx + hw, cy + hh);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - hw * 0.5, cy + hh - 2 * s); ctx.lineTo(cx + hw * 0.5, cy + hh - 2 * s); ctx.lineTo(cx, cy + 4 * s);
-    ctx.closePath();
-    ctx.fill();
   }
   ctx.restore();
   if (o.active) {

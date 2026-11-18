@@ -145,8 +145,9 @@ function decide(e: Elevator, w: World, idle: boolean): void {
  */
 function enRouteStop(e: Elevator, w: World): number | null {
   if (e.manualTarget !== null || e.dir === 0) return null;
-  // 「同じ方向を優先」と「1階で待つ」で選んだ移動は、途中の待っている階にも止まる(担当範囲内のみ)
-  const hallToo = e.tripCard === 'sameDir' || e.tripCard === 'home';
+  // 「同じ方向を優先」で選んだ移動は、途中の待っている階にも止まる(担当範囲内のみ)。
+  // 「空なら急行で1階へ」の移動は止まらない(乗っている人はいないので、降ろす階もない)
+  const hallToo = e.tripCard === 'sameDir';
   const hall = hallToo ? hallCalls(e, w, loadOf(e, w)) : null;
   // 進行方向で、まだ通り過ぎていない最初の階から目的階の手前まで
   const first = e.dir > 0 ? Math.floor(e.pos / U) + 1 : Math.ceil(e.pos / U) - 1;

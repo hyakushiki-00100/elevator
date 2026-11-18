@@ -112,7 +112,8 @@ const CARD_GAP = 16;
 const SLOTS_Y = 84;
 const ROW_H = 104;
 const HAND_GAP = 34;
-export const EDITOR_PLAY: Rect = { x: 480 - 38, y: 418, w: 76, h: 76 };
+/** 開始ボタン(右下。左下はステージの選択ボタン) */
+export const EDITOR_PLAY: Rect = { x: 230 + 500 - 16 - 76, y: 418, w: 76, h: 76 };
 
 function rowStartX(n: number): number {
   return 480 - (n * CARD_W + (n - 1) * CARD_GAP) / 2;

@@ -117,6 +117,56 @@ export function draw(a: DrawArgs): void {
   }
   if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
   ctx.restore();
+
+  // 縦長の画面では、上の余白に「横向きにして」の図を出す(文字は使わない。操作は妨げない)
+  if (a.cssH > a.cssW) drawRotateHint(ctx, a);
+}
+
+/** 縦長の画面のとき、上の余白に「スマホを横向きに回す」動きの図を描く */
+function drawRotateHint(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
+  const space = a.view.offsetY; // ゲームの上の余白(css px)
+  if (space < 48) return;
+  const size = Math.min(space * 0.7, a.cssW * 0.4, 140);
+  const cx = a.cssW / 2;
+  const cy = space / 2;
+  ctx.setTransform(a.dpr, 0, 0, a.dpr, 0, 0);
+  // 0→90度に回って少し止まる、を繰り返す
+  const period = 2400;
+  const t = (a.now % period) / period;
+  const turn = t < 0.15 ? 0 : t < 0.55 ? (t - 0.15) / 0.4 : 1;
+  const ease = turn * turn * (3 - 2 * turn);
+  const angle = (-Math.PI / 2) * ease;
+  const w = size * 0.42, h = size * 0.72;
+  ctx.save();
+  ctx.translate(cx, cy);
+  // 回転の矢印(弧+矢じり)
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(2, size * 0.035);
+  ctx.lineCap = 'round';
+  const r = size * 0.5;
+  const a0 = -Math.PI * 0.15, a1 = -Math.PI * 0.75;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, a0, a1, true);
+  ctx.stroke();
+  const ex = Math.cos(a1) * r, ey = Math.sin(a1) * r;
+  const tx = Math.sin(a1), ty = -Math.cos(a1); // 反時計回りの進む向き
+  const k = size * 0.09;
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath();
+  ctx.moveTo(ex + tx * k * 1.2, ey + ty * k * 1.2);
+  ctx.lineTo(ex + Math.cos(a1) * k, ey + Math.sin(a1) * k);
+  ctx.lineTo(ex - Math.cos(a1) * k, ey - Math.sin(a1) * k);
+  ctx.closePath();
+  ctx.fill();
+  // スマホ本体(角の丸い長方形)と画面
+  ctx.rotate(angle);
+  ctx.fillStyle = '#d7dbe6';
+  roundRect(ctx, -w / 2, -h / 2, w, h, w * 0.18);
+  ctx.fill();
+  ctx.fillStyle = '#2b3042';
+  roundRect(ctx, -w / 2 + w * 0.1, -h / 2 + h * 0.1, w * 0.8, h * 0.8, w * 0.08);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number): void {
