@@ -1,3 +1,4 @@
+import { theme } from './theme.ts';
 // 文字を使わないUIのためのアイコン(すべて図形で描く)
 
 export function fillCircle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
@@ -12,7 +13,7 @@ export function drawNumber(
   ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color: string,
   align: CanvasTextAlign = 'center',
 ): void {
-  ctx.font = `bold ${size}px system-ui, sans-serif`;
+  ctx.font = `bold ${size}px ${theme().font}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = color;
@@ -89,9 +90,9 @@ export function iconStar(ctx: CanvasRenderingContext2D, x: number, y: number, r:
     ctx.fillStyle = '#ffd34d';
     ctx.fill();
   } else {
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillStyle = `rgba(${theme().highlightRgb},0.08)`;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.strokeStyle = `rgba(${theme().highlightRgb},0.35)`;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -197,7 +198,7 @@ export function iconFinger(ctx: CanvasRenderingContext2D, x: number, y: number, 
 
 /** 共有(書き出し・読み込み): 箱と、外へ出る(上向き)/中へ入る(下向き)矢印 */
 export function iconShare(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, dir: 'out' | 'in'): void {
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = theme().text;
   ctx.lineWidth = Math.max(2, r * 0.16);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -219,7 +220,7 @@ export function iconShare(ctx: CanvasRenderingContext2D, x: number, y: number, r
 
 /** スピーカー。muted なら斜線、そうでなければ音の波 */
 export function iconSpeaker(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, muted: boolean): void {
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = theme().text;
   ctx.beginPath();
   ctx.moveTo(x - r * 0.75, y - r * 0.3);
   ctx.lineTo(x - r * 0.35, y - r * 0.3);
@@ -229,7 +230,7 @@ export function iconSpeaker(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.lineTo(x - r * 0.75, y + r * 0.3);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = muted ? '#e5484d' : '#ffffff';
+  ctx.strokeStyle = muted ? '#e5484d' : theme().text;
   ctx.lineWidth = Math.max(2, r * 0.15);
   ctx.lineCap = 'round';
   ctx.beginPath();

@@ -1,5 +1,6 @@
 import type { CardId } from '../sim/rules.ts';
 import { fillCircle, roundRect } from './icons.ts';
+import { theme } from './theme.ts';
 
 // ルールのカードの絵(文字は使わない)
 
@@ -108,7 +109,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
 export function drawEmptySlot(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   ctx.save();
   ctx.setLineDash([6, 5]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.strokeStyle = theme().textDim;
   ctx.lineWidth = 2;
   roundRect(ctx, x, y, w, h, Math.min(8, w * 0.12));
   ctx.stroke();

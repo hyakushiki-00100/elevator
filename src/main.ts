@@ -17,6 +17,7 @@ import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
 import { isShareDialogOpen, openShareDialog, type Feedback } from './ui/shareDialog.ts';
 import { SoundPlayer, type Sfx } from './platform/audio.ts';
+import { setTheme, theme } from './render/theme.ts';
 
 /**
  * 検証用の仕組み(URLの指定と window.__dev)を有効にするか。
@@ -28,6 +29,9 @@ const DEBUG_HOOKS = import.meta.env.DEV || import.meta.env.MODE === 'screenshot'
 const canvas = document.createElement('canvas');
 document.getElementById('app')!.append(canvas);
 const ctx = canvas.getContext('2d')!;
+/** ドット絵風のテーマで使う、粗い画素の下書き用キャンバス */
+const lowRes = document.createElement('canvas');
+const lowResCtx = lowRes.getContext('2d')!;
 
 // ---- 進行状況(端末内に保存する: platform/storage.ts) ----
 /** 手に入れたカード */
@@ -73,6 +77,9 @@ if (DEBUG_HOOKS) {
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
   devBuilding = { floors: num('floors'), elevators: num('elevators') };
   if (q.get('cards') === 'all') unlocked = [...CARD_ORDER];
+  // 見た目のテーマの見本(?theme=dark|light|retro|metal)。見た目の雰囲気が決まるまでの比較用
+  const th = q.get('theme');
+  if (th) setTheme(th);
   const st = num('stage');
   if (st !== undefined && st >= 1 && st <= STAGES.length) stageIdx = st - 1;
   if (['cards', 'stage', 'floors', 'elevators'].some((k) => q.has(k))) saving = false;
@@ -142,6 +149,7 @@ let cssW = 0, cssH = 0, dpr = 1;
 let view: View = makeView(1, 1);
 
 function resize(): void {
+  document.body.style.background = theme().bg;
   dpr = window.devicePixelRatio || 1;
   cssW = window.innerWidth;
   cssH = window.innerHeight;
@@ -368,8 +376,18 @@ function frame(now: number): void {
   }
   effects = effects.filter((e) => now - e.t0 <= EFFECT_MS);
   const st = stage();
+  // ドット絵風のテーマは、粗い画素の下書き用キャンバスに描いてから、ぼかさずに拡大する
+  const px = theme().pixel;
+  let drawCtx = ctx;
+  let drawDpr = dpr;
+  if (px > 1) {
+    const w = Math.max(1, Math.ceil(cssW / px)), h = Math.max(1, Math.ceil(cssH / px));
+    if (lowRes.width !== w || lowRes.height !== h) { lowRes.width = w; lowRes.height = h; }
+    drawCtx = lowResCtx;
+    drawDpr = 1 / px;
+  }
   draw({
-    ctx, cssW, cssH, dpr, view, layout, state,
+    ctx: drawCtx, cssW, cssH, dpr: drawDpr, view, layout, state,
     score: computeScore(state.stats, st.stars),
     starThresholds: st.stars,
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
@@ -378,6 +396,11 @@ function frame(now: number): void {
     stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted,
     result: mode === 'result' ? dayResult : null,
   });
+  if (px > 1) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(lowRes, 0, 0, canvas.width, canvas.height);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

@@ -8,6 +8,7 @@ import {
   MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
 } from './layout.ts';
 import { drawCard, drawEmptySlot } from './cards.ts';
+import { theme } from './theme.ts';
 import {
   drawNumber, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
@@ -15,17 +16,12 @@ import {
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
 
 /** 階ごとの色(行き先を色でも区別できるように) */
-export const FLOOR_COLORS = [
-  '#ef4b5f', '#4cc26a', '#f2c744', '#4f7ff0', '#f28b3a',
-  '#a35be0', '#3fd3d3', '#ec5fc0', '#a8d63a', '#e9a8a8',
-];
-export const floorColor = (f: number): string => FLOOR_COLORS[f % FLOOR_COLORS.length]!;
+export const floorColor = (f: number): string => {
+  const c = theme().floorColors;
+  return c[f % c.length]!;
+};
 
-const BG = '#14161c';
-const BAND_A = '#1d212b';
-const BAND_B = '#222735';
-const SHAFT = '#0e1015';
-const PANEL_BG = '#1a1d26';
+const T = theme;
 
 /** 演出(sim の出来事やタップから作る。sim には影響しない) */
 export interface Effect {
@@ -96,14 +92,14 @@ export interface DrawArgs {
 export function draw(a: DrawArgs): void {
   const { ctx, view, layout: l, state: s } = a;
   ctx.setTransform(a.dpr, 0, 0, a.dpr, 0, 0);
-  ctx.fillStyle = BG;
+  ctx.fillStyle = T().bg;
   ctx.fillRect(0, 0, a.cssW, a.cssH);
   ctx.setTransform(a.dpr * view.scale, 0, 0, a.dpr * view.scale, a.dpr * view.offsetX, a.dpr * view.offsetY);
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, LOGICAL_W, LOGICAL_H);
   ctx.clip();
-  ctx.fillStyle = BG;
+  ctx.fillStyle = T().bg;
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
 
   drawBuilding(ctx, l, s, a.now);
@@ -123,7 +119,7 @@ export function draw(a: DrawArgs): void {
   if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
   // 消音ボタン(どの画面でも一番上に)
   const mb = MUTE_BUTTON;
-  ctx.fillStyle = 'rgba(58,65,86,0.9)';
+  ctx.fillStyle = T().button;
   roundRect(ctx, mb.x, mb.y, mb.w, mb.h, 6);
   ctx.fill();
   iconSpeaker(ctx, mb.x + mb.w / 2, mb.y + mb.h / 2, mb.w * 0.36, a.muted);
@@ -189,27 +185,31 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
 
   for (let f = 0; f < l.floors; f++) {
     const y = floorTop(l, f);
-    ctx.fillStyle = f % 2 === 0 ? BAND_A : BAND_B;
+    const band = f % 2 === 0 ? T().bandA : T().bandB;
+    ctx.fillStyle = T().metal ? metalGradient(ctx, 0, y, 0, l.floorH, band, true) : band;
     ctx.fillRect(0, y, BUILDING_RIGHT, l.floorH);
     // 階の色の帯と番号
     ctx.fillStyle = floorColor(f);
     ctx.fillRect(0, y, 8, l.floorH);
-    drawNumber(ctx, String(f + 1), 26, y + l.floorH - 14, 18, floorColor(f));
+    const numColor = T().floorNumber ?? floorColor(f);
+    if (T().metal) { ctx.shadowColor = numColor; ctx.shadowBlur = 8; }
+    drawNumber(ctx, String(f + 1), 26, y + l.floorH - 14, 18, numColor);
+    ctx.shadowBlur = 0;
     // 床の線
-    ctx.fillStyle = '#394056';
+    ctx.fillStyle = T().floorLine;
     ctx.fillRect(8, y + l.floorH - 2, BUILDING_RIGHT - 8, 2);
     // 呼び出しランプ
     if (waitingAt.has(f)) fillCircle(ctx, l.queueRight + 8, y + 16, 5, '#ffd34d');
     // 手動指示の目的階(点滅する枠)
     if (targets.has(f)) {
       const pulse = 0.5 + 0.5 * Math.sin(now / 160);
-      ctx.strokeStyle = `rgba(255,255,255,${(0.35 + 0.45 * pulse).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${T().highlightRgb},${(0.35 + 0.45 * pulse).toFixed(3)})`;
       ctx.lineWidth = 2;
       ctx.strokeRect(10, y + 2, BUILDING_RIGHT - 12, l.floorH - 4);
     }
   }
   for (const x of l.shaftX) {
-    ctx.fillStyle = SHAFT;
+    ctx.fillStyle = T().shaft;
     ctx.fillRect(x, l.top, l.shaftW, l.floors * l.floorH);
   }
 }
@@ -271,7 +271,7 @@ function drawPassenger(
   ctx.beginPath();
   ctx.arc(x, cy, r + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remain);
   ctx.stroke();
-  drawNumber(ctx, String(p.dest + 1), x, cy - r - 8, 13, '#ffffff');
+  drawNumber(ctx, String(p.dest + 1), x, cy - r - 8, 13, T().text);
 }
 
 function drawElevator(
@@ -282,14 +282,14 @@ function drawElevator(
   const h = carHeight(l);
   const w = l.shaftW;
 
-  ctx.fillStyle = '#3a4156';
+  ctx.fillStyle = T().metal ? metalGradient(ctx, x, y, w, h, T().carBody) : T().carBody;
   roundRect(ctx, x + 1, y, w - 2, h, 6);
   ctx.fill();
-  ctx.fillStyle = '#2b3042';
+  ctx.fillStyle = T().carInner;
   roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 4);
   ctx.fill();
   if (selected && s.elevators.length > 1) {
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = `rgb(${T().highlightRgb})`;
     ctx.lineWidth = 2.5;
     roundRect(ctx, x - 1, y - 1, w + 2, h + 2, 7);
     ctx.stroke();
@@ -322,13 +322,13 @@ function drawElevator(
   // 扉: 開いている間は左右に引き込まれる
   const open = doorOpen(e, s.building.doorTicks);
   const half = (w - 10) / 2;
-  ctx.fillStyle = 'rgba(160,170,195,0.5)';
+  ctx.fillStyle = T().door;
   ctx.fillRect(x + 5, y + 20, half * (1 - open), h - 25);
   ctx.fillRect(x + 5 + half + half * open, y + 20, half * (1 - open), h - 25);
 
   // 進行方向の矢印
   if (e.dir !== 0) {
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = T().text;
     ctx.beginPath();
     const cx = x + w / 2;
     if (e.dir === 1) {
@@ -350,6 +350,32 @@ export function doorOpen(e: Elevator, doorTicks: number): number {
   return Math.max(0, Math.min(1, opening, closing));
 }
 
+/**
+ * 金属の質感(テーマ metal): 横向き(既定)は筋のある明暗、vertical は上が明るく下が暗い面。
+ * w=0 で vertical のときは y〜y+h の縦のグラデーション
+ */
+function metalGradient(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, base: string, vertical = false): CanvasGradient {
+  const g = vertical ? ctx.createLinearGradient(0, y, 0, y + h) : ctx.createLinearGradient(x, y, x + w, y);
+  if (vertical) {
+    g.addColorStop(0, shade(base, 18));
+    g.addColorStop(1, shade(base, -10));
+  } else {
+    g.addColorStop(0, shade(base, -14));
+    g.addColorStop(0.35, shade(base, 16));
+    g.addColorStop(0.5, shade(base, 4));
+    g.addColorStop(0.7, shade(base, 14));
+    g.addColorStop(1, shade(base, -14));
+  }
+  return g;
+}
+
+/** #rrggbb を明るく(+)・暗く(−)する */
+function shade(hex: string, amt: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number): number => Math.max(0, Math.min(255, v + amt));
+  return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+
 export const EFFECT_MS = 900;
 const RIPPLE_MS = 350;
 
@@ -359,7 +385,7 @@ function drawTapRipples(ctx: CanvasRenderingContext2D, effects: readonly Effect[
     if (ef.type !== 'tap' || ef.x === undefined || ef.y === undefined) continue;
     const t = (now - ef.t0) / RIPPLE_MS;
     if (t < 0 || t > 1) continue;
-    ctx.strokeStyle = `rgba(255,255,255,${(0.7 * (1 - t)).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(${T().highlightRgb},${(0.7 * (1 - t)).toFixed(3)})`;
     ctx.lineWidth = 3 * (1 - t) + 1;
     ctx.beginPath();
     ctx.arc(ef.x, ef.y, 8 + 26 * t, 0, Math.PI * 2);
@@ -386,7 +412,7 @@ function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly
 function drawPanel(
   ctx: CanvasRenderingContext2D, s: SimState, sc: ScoreResult, th: readonly [number, number, number], now: number,
 ): void {
-  ctx.fillStyle = PANEL_BG;
+  ctx.fillStyle = T().metal ? metalGradient(ctx, PANEL_X, 16, PANEL_W, LOGICAL_H - 32, T().panelBg) : T().panelBg;
   roundRect(ctx, PANEL_X, 16, PANEL_W, LOGICAL_H - 32, 10);
   ctx.fill();
 
@@ -395,7 +421,7 @@ function drawPanel(
   const bw = PANEL_W - 40;
   const by = 74;
   const phases = s.config.traffic.phases;
-  const colors = ['#a8743a', '#3d7fa8', '#7a4fa8'];
+  const colors = T().phaseColors;
   let acc = 0;
   phases.forEach((ph, i) => {
     const x0 = bx + (acc / s.dayTicks) * bw;
@@ -407,7 +433,7 @@ function drawPanel(
   });
   const t = Math.min(1, s.tick / s.dayTicks);
   const mx = bx + t * bw;
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = T().text;
   ctx.fillRect(mx - 1.5, by - 4, 3, 20);
   if (s.tick >= s.dayTicks && !s.finished) {
     // 延長中: 月が点滅
@@ -419,19 +445,19 @@ function drawPanel(
   const numX = PANEL_X + PANEL_W - 28;
   let y = 140;
   iconCheck(ctx, rowX, y, 13);
-  drawNumber(ctx, String(sc.delivered), numX, y + 9, 26, '#ffffff', 'right');
+  drawNumber(ctx, String(sc.delivered), numX, y + 9, 26, T().text, 'right');
   y += 50;
   iconCross(ctx, rowX, y, 13);
-  drawNumber(ctx, String(sc.missed), numX, y + 9, 26, '#ffffff', 'right');
+  drawNumber(ctx, String(sc.missed), numX, y + 9, 26, T().text, 'right');
   y += 50;
   iconClock(ctx, rowX, y, 14);
-  drawNumber(ctx, sc.avgWaitSec.toFixed(1), numX, y + 9, 26, '#ffffff', 'right');
+  drawNumber(ctx, sc.avgWaitSec.toFixed(1), numX, y + 9, 26, T().text, 'right');
 
   // 点数と星(閾値に届いた星が光る)
   y += 70;
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillStyle = T().floorLine;
   ctx.fillRect(PANEL_X + 20, y - 34, PANEL_W - 40, 2);
-  drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, y + 16, 40, '#ffd34d');
+  drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, y + 16, 40, T().accent);
   y += 56;
   for (let i = 0; i < 3; i++) {
     iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 46, y, 17, sc.score >= th[i]!);
@@ -452,13 +478,13 @@ function drawPanel(
     const x0 = PANEL_X + PANEL_W / 2 - total / 2;
     e.rules.forEach((c, i) => drawCard(ctx, c, x0 + i * (cw + gap), ry, cw, ch, { active: e.ruleIndex === i }));
     // 2基以上なら、行の左にエレベーターの番号
-    if (s.elevators.length > 1) drawNumber(ctx, String(e.id + 1), PANEL_X + 18, ry + ch / 2 + 6, 15, 'rgba(255,255,255,0.6)');
+    if (s.elevators.length > 1) drawNumber(ctx, String(e.id + 1), PANEL_X + 18, ry + ch / 2 + 6, 15, T().textDim);
     ry += ch + gap;
   }
 }
 
 function dim(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = 'rgba(8,10,14,0.66)';
+  ctx.fillStyle = T().dim;
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
 }
 
@@ -473,10 +499,10 @@ function drawStart(ctx: CanvasRenderingContext2D, now: number): void {
   // 遊び方の図: 指が階をタップ → エレベーターが向かう(文字は使わない)
   const hx = cx - 150;
   const hy = cy + 120;
-  ctx.fillStyle = '#2b3042';
+  ctx.fillStyle = T().button;
   ctx.fillRect(hx - 10, hy - 30, 300, 60);
   fillCircle(ctx, hx + 30, hy, 9, floorColor(2));
-  drawNumber(ctx, '3', hx + 30, hy - 14, 12, '#ffffff');
+  drawNumber(ctx, '3', hx + 30, hy - 14, 12, T().text);
   // 指(丸と短い軸)
   const tap = (Math.floor(now / 600) % 2) === 0;
   fillCircle(ctx, hx + 90, hy + (tap ? 0 : -6), 10, '#f5d0b0');
@@ -490,13 +516,13 @@ function drawStart(ctx: CanvasRenderingContext2D, now: number): void {
     ctx.stroke();
   }
   // 矢印 → かご
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = T().text;
   ctx.fillRect(hx + 130, hy - 2, 70, 4);
   ctx.beginPath();
   ctx.moveTo(hx + 210, hy); ctx.lineTo(hx + 198, hy - 8); ctx.lineTo(hx + 198, hy + 8);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#3a4156';
+  ctx.fillStyle = T().carBody;
   roundRect(ctx, hx + 230, hy - 26, 40, 52, 5);
   ctx.fill();
 }
@@ -504,7 +530,7 @@ function drawStart(ctx: CanvasRenderingContext2D, now: number): void {
 function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   dim(ctx);
   const p = EDITOR_PANEL;
-  ctx.fillStyle = '#1f2330';
+  ctx.fillStyle = T().dialogBg;
   roundRect(ctx, p.x, p.y, p.w, p.h, 14);
   ctx.fill();
   const rows = a.editRules.length;
@@ -516,9 +542,9 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
       if (c) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h);
       else drawEmptySlot(ctx, rc.x, rc.y, rc.w, rc.h);
       // 評価の順番(数字)と、次の枠への矢印
-      drawNumber(ctx, String(i + 1), rc.x + rc.w / 2, rc.y - 8, 13, 'rgba(255,255,255,0.6)');
+      drawNumber(ctx, String(i + 1), rc.x + rc.w / 2, rc.y - 8, 13, T().textDim);
       if (i < a.slotCount - 1) {
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.fillStyle = T().textDim;
         const ax = rc.x + rc.w + 4;
         const ay = rc.y + rc.h / 2;
         ctx.beginPath();
@@ -530,12 +556,12 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     if (rows > 1) {
       // エレベーターの選択ボタン(小さなかご)。選択中は白枠
       const b = rowButtonRect(r, a.slotCount);
-      ctx.fillStyle = '#3a4156';
+      ctx.fillStyle = T().button;
       roundRect(ctx, b.x, b.y, b.w, b.h, 5);
       ctx.fill();
-      drawNumber(ctx, String(r + 1), b.x + b.w / 2, b.y + b.h / 2 + 6, 16, '#ffffff');
+      drawNumber(ctx, String(r + 1), b.x + b.w / 2, b.y + b.h / 2 + 6, 16, T().text);
       if (r === a.editRow) {
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = `rgb(${T().highlightRgb})`;
         ctx.lineWidth = 2.5;
         roundRect(ctx, b.x - 3, b.y - 3, b.w + 6, b.h + 6, 7);
         ctx.stroke();
@@ -551,7 +577,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   });
   // 手持ちと枠の間に「上へ置く」矢印
   const hr = handRect(0, a.unlocked.length, rows);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillStyle = T().textDim;
   ctx.beginPath();
   ctx.moveTo(480, hr.y - 26); ctx.lineTo(490, hr.y - 14); ctx.lineTo(470, hr.y - 14);
   ctx.closePath();
@@ -559,7 +585,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
 
   // ルールの共有(書き出し・読み込み)
   for (const [b, dir] of [[SHARE_EXPORT_BUTTON, 'out'], [SHARE_IMPORT_BUTTON, 'in']] as const) {
-    ctx.fillStyle = '#3a4156';
+    ctx.fillStyle = T().button;
     roundRect(ctx, b.x, b.y, b.w, b.h, 6);
     ctx.fill();
     iconShare(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w * 0.32, dir);
@@ -569,10 +595,10 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   if (a.stagesOpen > 1) {
     for (let i = 0; i < a.stagesOpen; i++) {
       const r = stageTabRect(i);
-      ctx.fillStyle = i === a.stageIdx ? '#4f7ff0' : '#3a4156';
+      ctx.fillStyle = i === a.stageIdx ? T().buttonActive : T().button;
       roundRect(ctx, r.x, r.y, r.w, r.h, 6);
       ctx.fill();
-      drawNumber(ctx, String(i + 1), r.x + r.w / 2, r.y + 21, 16, '#ffffff');
+      drawNumber(ctx, String(i + 1), r.x + r.w / 2, r.y + 21, 16, i === a.stageIdx ? '#ffffff' : T().text);
       for (let k = 0; k < 3; k++) iconStar(ctx, r.x + r.w / 2 + (k - 1) * 12, r.y + 31, 5, (a.bestStars[i] ?? 0) > k);
     }
   }
@@ -588,7 +614,7 @@ function drawResult(
 ): void {
   dim(ctx);
   const p = RESULT_PANEL;
-  ctx.fillStyle = '#1f2330';
+  ctx.fillStyle = T().dialogBg;
   roundRect(ctx, p.x, p.y, p.w, p.h, 14);
   ctx.fill();
   const cx = p.x + p.w / 2;
@@ -601,12 +627,12 @@ function drawResult(
     iconStar(ctx, cx + (i - 1) * 84, p.y + 70 + (i === 1 ? -10 : 0), 32 * scale, filled);
   }
   // 正式な点。左に根拠(カレンダー=複数日の平均 / 指=手動を使った日の点)
-  drawNumber(ctx, String(res.score), cx, p.y + 170, 52, '#ffd34d');
+  drawNumber(ctx, String(res.score), cx, p.y + 170, 52, T().accent);
   if (res.basis === 'rated') {
     iconCalendar(ctx, cx - 125, p.y + 152, 20, res.days);
     // 右に、画面で見た日の点(カレンダー「1」)
     iconCalendar(ctx, cx + 118, p.y + 152, 13, 1, 'rgba(159,179,255,0.7)');
-    drawNumber(ctx, String(res.dayScore), cx + 140, p.y + 160, 18, 'rgba(255,255,255,0.7)', 'left');
+    drawNumber(ctx, String(res.dayScore), cx + 140, p.y + 160, 18, T().textDim, 'left');
   } else {
     iconFinger(ctx, cx - 125, p.y + 152, 22);
   }
@@ -614,11 +640,11 @@ function drawResult(
   const y = p.y + 225;
   const cols = [cx - 140, cx, cx + 140];
   iconCheck(ctx, cols[0]! - 30, y, 14);
-  drawNumber(ctx, String(sc.delivered), cols[0]! + 4, y + 9, 26, '#ffffff', 'left');
+  drawNumber(ctx, String(sc.delivered), cols[0]! + 4, y + 9, 26, T().text, 'left');
   iconCross(ctx, cols[1]! - 30, y, 14);
-  drawNumber(ctx, String(sc.missed), cols[1]! + 4, y + 9, 26, '#ffffff', 'left');
+  drawNumber(ctx, String(sc.missed), cols[1]! + 4, y + 9, 26, T().text, 'left');
   iconClock(ctx, cols[2]! - 30, y, 15);
-  drawNumber(ctx, sc.avgWaitSec.toFixed(1), cols[2]! + 4, y + 9, 26, '#ffffff', 'left');
+  drawNumber(ctx, sc.avgWaitSec.toFixed(1), cols[2]! + 4, y + 9, 26, T().text, 'left');
 
   const b = RETRY_BUTTON;
   fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2, '#4f7ff0');
