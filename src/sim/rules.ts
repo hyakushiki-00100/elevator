@@ -4,10 +4,10 @@ import type { Elevator, World } from './elevator.ts';
 // 運行ルールのカード(5.4節)。
 // カードのID(文字列)は共有文字列の中身になるため、一度公開したら意味を変えない。
 
-export type CardId = 'nearest' | 'sameDir' | 'oldest' | 'home' | 'zoneLow' | 'zoneHigh';
+export type CardId = 'nearest' | 'sameDir' | 'urgent' | 'home' | 'zoneLow' | 'zoneHigh';
 
 /** すべてのカード(共有文字列での番号もこの順。末尾に足すだけにし、並べ替えない) */
-export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'oldest', 'home', 'zoneLow', 'zoneHigh'];
+export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'urgent', 'home', 'zoneLow', 'zoneHigh'];
 
 /** 担当範囲のカード: 行き先を決めるのではなく、そのエレベーターが応える階を絞る(どの枠に置いても効く) */
 export const ZONE_CARDS: readonly CardId[] = ['zoneLow', 'zoneHigh'];
@@ -35,8 +35,10 @@ export interface RuleContext {
   heading: -1 | 1;
   /** 待っている人のうち「今の空きに乗れる人」がいる階 */
   hall: boolean[];
-  /** その階で乗れる人のうち、一番早く来た人の発生tick(いなければ Infinity) */
-  oldestSpawn: number[];
+  /** その階で乗れる人のうち、我慢の残りが一番少ない人の残りtick(いなければ Infinity) */
+  remain: number[];
+  /** その階に、我慢が半分を切った(乗れる)人がいるか */
+  urgent: boolean[];
   /** 乗っている人の行き先 */
   car: boolean[];
   /** 待機中なら、今いる階の乗れる人も対象にする(扉を開けて乗せる) */
@@ -84,22 +86,26 @@ const home: CardFn = (c) => {
 /** 担当範囲のカードは行き先を決めない(makeContext で呼び出しを絞る) */
 const zone: CardFn = () => null;
 
-/** 長く待っている階を優先: 一番早く来た(乗れる)人がいる階。同じなら近い階 */
-const oldest: CardFn = (c) => {
+/**
+ * 限界が近い人を優先: 我慢が半分を切った人がいる階のうち、残りが一番少ない人の階。
+ * そういう人がいなければ当てはまらない(下の枠のカードに任せる)。緊急対応として上の枠に置く想定。
+ * (以前の「一番長く待っている人を常に追う」形は、どの条件でも最下位だったため変更した)
+ */
+const urgent: CardFn = (c) => {
   let best: number | null = null;
-  let bestSpawn = Infinity;
+  let bestRemain = Infinity;
   for (let f = 0; f < c.floors; f++) {
-    if (!c.hall[f] || !allowedHere(c, f)) continue;
-    const t = c.oldestSpawn[f]!;
-    if (t < bestSpawn || (t === bestSpawn && best !== null && Math.abs(f - c.cur) < Math.abs(best - c.cur))) {
-      bestSpawn = t;
+    if (!c.urgent[f] || !allowedHere(c, f)) continue;
+    const r = c.remain[f]!;
+    if (r < bestRemain || (r === bestRemain && best !== null && Math.abs(f - c.cur) < Math.abs(best - c.cur))) {
+      bestRemain = r;
       best = f;
     }
   }
   return best;
 };
 
-export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, oldest, home, zoneLow: zone, zoneHigh: zone };
+export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, urgent, home, zoneLow: zone, zoneHigh: zone };
 
 /** そのエレベーターが応える階か(担当範囲のカードがなければすべて。複数あれば合わせた範囲) */
 export function servesFloor(rules: readonly CardId[], f: number, floors: number): boolean {
@@ -122,19 +128,24 @@ export function hallCalls(e: Elevator, w: World, load: number): boolean[] {
 export function makeContext(e: Elevator, w: World, includeCur: boolean, load: number): RuleContext {
   const floors = w.building.floors;
   const hall = new Array<boolean>(floors).fill(false);
-  const oldestSpawn = new Array<number>(floors).fill(Infinity);
+  const remain = new Array<number>(floors).fill(Infinity);
+  const urgentAt = new Array<boolean>(floors).fill(false);
   for (const p of w.passengers) {
     if (p.state !== 'waiting' || load + p.size > w.building.capacity) continue;
     if (!servesFloor(e.rules, p.origin, floors)) continue;
     hall[p.origin] = true;
-    if (p.spawnTick < oldestSpawn[p.origin]!) oldestSpawn[p.origin] = p.spawnTick;
+    const waited = w.tick - p.spawnTick;
+    const r = p.patience - waited;
+    if (r < remain[p.origin]!) remain[p.origin] = r;
+    if (waited * 2 >= p.patience) urgentAt[p.origin] = true;
   }
   return {
     cur: Math.round(e.pos / U),
     floors,
     heading: e.heading,
     hall,
-    oldestSpawn,
+    remain,
+    urgent: urgentAt,
     car: e.stops,
     includeCur,
   };

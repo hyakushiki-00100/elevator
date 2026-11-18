@@ -31,6 +31,8 @@ export interface SimState {
   finished: boolean;
   /** このtickに起きた出来事(描画の演出用。step の最初に空になる) */
   events: SimEvent[];
+  /** 手動の指示が1度でも受け付けられたか(手動を使った日は、複数日の平均で採点できない) */
+  manualUsed: boolean;
 }
 
 export type Command = { type: 'goto'; elevator: number; floor: number };
@@ -70,6 +72,7 @@ export function createSim(config: SimConfig, seed: number): SimState {
     phaseIndex: 0,
     finished: false,
     events: [],
+    manualUsed: false,
   };
 }
 
@@ -86,6 +89,7 @@ function applyCommand(s: SimState, c: Command): void {
   if (!e) return;
   if (!Number.isInteger(c.floor) || c.floor < 0 || c.floor >= s.config.building.floors) return;
   e.manualTarget = c.floor;
+  s.manualUsed = true;
 }
 
 /**
@@ -150,6 +154,7 @@ export function stateHash(s: SimState): number {
   mix(s.rng.getState());
   mix(s.nextId);
   mix(s.finished ? 1 : 0);
+  mix(s.manualUsed ? 1 : 0);
   for (const q of s.passengers) {
     mix(q.id); mix(q.origin); mix(q.dest); mix(q.size); mix(q.elevatorId);
     mix(q.spawnTick); mix(q.patience); mix(q.waitTicks);

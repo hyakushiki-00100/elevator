@@ -3,7 +3,8 @@ import { addPassenger, createSim, step, type Command, type SimState } from './si
 import { computeScore } from './sim/score.ts';
 import { STAGES, type Stage } from './sim/stages.ts';
 import { CARD_ORDER, type CardId } from './sim/rules.ts';
-import { draw, EFFECT_MS, type Effect, type Mode } from './render/render.ts';
+import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './render/render.ts';
+import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
   editorHit, hitTest, inRect, makeLayout, makeView, RETRY_BUTTON, stageTabHit, toLogical, type Layout, type View,
 } from './render/layout.ts';
@@ -58,6 +59,8 @@ let editRow = 0;
 let newCards: CardId[] = [];
 /** この日の終わりに新しく開いたステージ(なければ null) */
 let newStage: number | null = null;
+/** 1日の終わりの正式な結果 */
+let dayResult: DayResult | null = null;
 
 let state: SimState;
 let layout: Layout;
@@ -103,14 +106,33 @@ function setMode(m: Mode): void {
   modeSince = performance.now();
 }
 
-/** 1日の終わり: 星を記録し、カードを手に入れる */
+/**
+ * 1日の正式な結果。カードだけで動かした日は、同じルールで複数日を画面に出さずに計算した平均
+ * (1日分の点は運のぶれが大きく、カードの組み合わせの差より大きいことがあるため: sim/evaluate.ts)。
+ * 手動を1度でも使った日や、カードを置いていない日は、その日の点。
+ */
+function officialResult(): DayResult {
+  const st = stage();
+  const day = computeScore(state.stats, st.stars);
+  const rules = rulesByStage[stageIdx] ?? [];
+  const hasCards = rules.some((r) => r.length > 0);
+  if (!hasCards || state.manualUsed) {
+    return { score: day.score, stars: day.stars, basis: 'manual', days: 1, dayScore: day.score };
+  }
+  const t0 = performance.now();
+  const rating = rateRules(st, rules);
+  if (import.meta.env.DEV) console.info(`rating: ${RATING_DAYS}日分 ${(performance.now() - t0).toFixed(0)}ms`);
+  return { score: rating.score, stars: rating.stars, basis: 'rated', days: RATING_DAYS, dayScore: day.score };
+}
+
+/** 1日の終わり: 正式な結果を出し、星を記録し、カードを手に入れる */
 function finishDay(): void {
-  const sc = computeScore(state.stats, stage().stars);
-  bestStars[stageIdx] = Math.max(bestStars[stageIdx] ?? 0, sc.stars);
-  const openBefore = stagesOpen(unlocked, STAGES.length);
+  dayResult = officialResult();
+  bestStars[stageIdx] = Math.max(bestStars[stageIdx] ?? 0, dayResult.stars);
+  const openBefore = stagesOpen(unlocked, STAGES);
   newCards = nextUnlock(unlocked);
   unlocked = [...unlocked, ...newCards];
-  const openAfter = stagesOpen(unlocked, STAGES.length);
+  const openAfter = stagesOpen(unlocked, STAGES);
   newStage = openAfter > openBefore ? openAfter - 1 : null;
   setMode('result');
 }
@@ -144,7 +166,7 @@ function onReadyTap(x: number, y: number): void {
     setMode('playing');
     return;
   }
-  const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES.length));
+  const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
   if (tab !== null) {
     stageIdx = tab;
     newDay();
@@ -227,7 +249,8 @@ function frame(now: number): void {
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
-    stagesOpen: stagesOpen(unlocked, STAGES.length), stageIdx, bestStars,
+    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars,
+    result: mode === 'result' ? dayResult : null,
   });
   requestAnimationFrame(frame);
 }
@@ -241,6 +264,7 @@ if (import.meta.env.DEV) {
     get rules() { return currentRules(); },
     get unlocked() { return unlocked; },
     get stageIdx() { return stageIdx; },
+    get result() { return dayResult; },
     addPassenger,
     /** 検証用: 時間を早送りする */
     fastForward(ticks: number) { for (let i = 0; i < ticks && !state.finished; i++) step(state); },

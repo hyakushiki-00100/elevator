@@ -12,8 +12,14 @@ export interface TrafficPhase {
   rateEnd: number;
   /** 発生した人が「1階(index0)から上へ」向かう割合(朝のラッシュ) */
   fromGround: number;
-  /** 発生した人が「上の階から1階へ」向かう割合(夕方のラッシュ)。fromGround との合計は 1 以下 */
+  /** 発生した人が「上の階から1階へ」向かう割合(夕方のラッシュ) */
   toGround: number;
+  /**
+   * 発生した人が「同じ半分の中で」移動する割合(下の階どうし・上の階どうし)。
+   * 半分の分け方は担当範囲のカードと同じ(下: 1階〜真ん中、上: 真ん中より上)。
+   * fromGround + toGround + local は 1 以下。残りは全階から一様。
+   */
+  local: number;
   /** 種類の割合(残りは「ふつう」)。合計は 1 以下 */
   rushedShare: number;
   groupShare: number;
@@ -34,6 +40,7 @@ export function makePhase(overrides: Partial<TrafficPhase> = {}): TrafficPhase {
     rateEnd: overrides.rateEnd ?? rate,
     fromGround: 0,
     toGround: 0,
+    local: 0,
     rushedShare: 0,
     groupShare: 0,
     luggageShare: 0,
@@ -89,7 +96,7 @@ export function validatePlan(plan: DayPlan): void {
     Number.isInteger(plan.overtimeTicks) && plan.overtimeTicks >= 0 &&
     plan.phases.every((p) =>
       Number.isInteger(p.ticks) && p.ticks >= 1 && okShare(p.rate) && okShare(p.rateEnd) &&
-      okShare(p.fromGround) && okShare(p.toGround) && p.fromGround + p.toGround <= 1 &&
+      okShare(p.fromGround) && okShare(p.toGround) && okShare(p.local) && p.fromGround + p.toGround + p.local <= 1 + 1e-9 &&
       okShare(p.rushedShare) && okShare(p.groupShare) && okShare(p.luggageShare) &&
       p.rushedShare + p.groupShare + p.luggageShare <= 1);
   if (!ok) throw new Error(`invalid day plan: ${JSON.stringify(plan)}`);
@@ -120,6 +127,14 @@ export function maybeSpawn(
   } else if (mode < ph.fromGround + ph.toGround) {
     origin = 1 + (c % (b.floors - 1));
     dest = 0;
+  } else if (mode < ph.fromGround + ph.toGround + ph.local && b.floors >= 4) {
+    // 同じ半分の中での移動(出発階 a と同じ半分から、a 以外の階を選ぶ)
+    const mid = Math.floor((b.floors - 1) / 2);
+    origin = a;
+    const lo = origin <= mid ? 0 : mid + 1;
+    const hi = origin <= mid ? mid : b.floors - 1;
+    const d = lo + (c % (hi - lo));
+    dest = d >= origin ? d + 1 : d;
   } else {
     origin = a;
     dest = c >= origin ? c + 1 : c;

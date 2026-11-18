@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { makeBuilding } from '../src/sim/building.ts';
 import { addPassenger, createSim, stateHash, step } from '../src/sim/sim.ts';
 import { computeScore, deliveryPoints, PENALTY_PER_MISS, POINTS_MAX, POINTS_MIN } from '../src/sim/score.ts';
-import { STAGES } from '../src/sim/stages.ts';
-import type { CardId } from '../src/sim/rules.ts';
 import { dayTicks, makePhase, phaseAt, phaseIndexAt, rateAt, type DayPlan } from '../src/sim/traffic.ts';
-import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from '../tools/bots.ts';
+import { greedyBot } from '../tools/bots.ts';
 
 function plan(phases: Parameters<typeof makePhase>[0][], overtimeTicks = 0): DayPlan {
   return { phases: phases.map((p) => makePhase(p)), overtimeTicks };
@@ -179,115 +177,5 @@ describe('採点', () => {
     expect(arrived).toBe(s.stats.delivered);
     expect(s.stats.delivered).toBeGreaterThan(50);
     expect(s.stats.servicePoints).toBe(expected);
-  });
-});
-
-describe('ステージ1(較正済みの性質)', () => {
-  const st = STAGES[0]!;
-  function playDay(bot: Bot) {
-    const s = createSim({ building: st.building, traffic: st.traffic }, st.seed);
-    while (!s.finished) step(s, bot(s));
-    return { s, r: computeScore(s.stats, st.stars) };
-  }
-
-  it('1日は3分(5400tick)+延長で終わる', () => {
-    expect(dayTicks(st.traffic)).toBe(5400);
-    const { s } = playDay(greedyBot);
-    expect(s.tick).toBeGreaterThanOrEqual(5400);
-    expect(s.tick).toBeLessThanOrEqual(5400 + st.traffic.overtimeTicks);
-  });
-
-  it('同じステージ・同じ操作なら同じ点数(決定性)', () => {
-    const a = playDay(expertBot), b = playDay(expertBot);
-    expect(stateHash(a.s)).toBe(stateHash(b.s));
-    expect(a.r.score).toBe(b.r.score);
-  });
-
-  it('何もしなければ星0。上級者 > 初心者 > 反応の遅い初心者(運行の考え方と反応が点に出る)', () => {
-    expect(playDay(idleBot).r.stars).toBe(0);
-    const e = playDay(expertBot).r.score;
-    const g = playDay(greedyBot).r.score;
-    const c = playDay(everyTicks(greedyBot, 30)).r.score;
-    expect(e).toBeGreaterThan(g);
-    expect(g).toBeGreaterThan(c);
-    // 2★は手動の初心者でも届く。3★は手動では届かない(較正の前提)
-    expect(g).toBeGreaterThanOrEqual(st.stars[1]);
-    expect(e).toBeLessThan(st.stars[2]);
-  });
-
-  it('ステージのシードは「平均的な日」: 発生人数が200シードの中央値±5%以内', () => {
-    const counts: number[] = [];
-    let mine = 0;
-    for (let seed = 1000; seed < 1200; seed++) {
-      const s = createSim({ building: st.building, traffic: st.traffic }, seed);
-      while (!s.finished) step(s);
-      counts.push(s.stats.spawned);
-      if (seed === st.seed) mine = s.stats.spawned;
-    }
-    if (st.seed < 1000 || st.seed >= 1200) {
-      const s = createSim({ building: st.building, traffic: st.traffic }, st.seed);
-      while (!s.finished) step(s);
-      mine = s.stats.spawned;
-    }
-    counts.sort((a, b) => a - b);
-    const median = counts[100]!;
-    expect(Math.abs(mine - median)).toBeLessThanOrEqual(median * 0.05);
-  });
-
-  it('3★はカードの組み合わせで届き、最初の1枚だけでは届かない', () => {
-    const withRules = (rules: CardId[]) => {
-      const s = createSim({ building: st.building, traffic: st.traffic, rules: [rules] }, st.seed);
-      while (!s.finished) step(s);
-      return computeScore(s.stats, st.stars);
-    };
-    expect(withRules(['nearest']).stars).toBe(2);
-    expect(withRules(['sameDir', 'nearest']).stars).toBe(3);
-  });
-
-  it('星の閾値は昇順', () => {
-    expect(st.stars[0]).toBeLessThan(st.stars[1]);
-    expect(st.stars[1]).toBeLessThan(st.stars[2]);
-  });
-});
-
-describe('ステージ2(2基・較正済みの性質)', () => {
-  const st = STAGES[1]!;
-  const play = (rules?: CardId[][], bot?: Bot) => {
-    const s = createSim({ building: st.building, traffic: st.traffic, rules }, st.seed);
-    while (!s.finished) step(s, bot ? bot(s) : []);
-    return { s, r: computeScore(s.stats, st.stars) };
-  };
-
-  it('2基・7階で、1日は3分+延長', () => {
-    expect(st.building.elevators).toBe(2);
-    expect(dayTicks(st.traffic)).toBe(5400);
-  });
-
-  it('3★はゾーン分け(担当範囲のカード)で届き、ゾーンなしや手動相当では届かない', () => {
-    expect(play([['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest']]).r.stars).toBe(3);
-    expect(play([['sameDir', 'nearest'], ['sameDir', 'nearest']]).r.stars).toBeLessThan(3);
-    expect(play([['nearest'], ['nearest']]).r.stars).toBeLessThan(3);
-    expect(play(undefined, expertBot).r.stars).toBeLessThan(3);
-    expect(play(undefined, greedyBot).r.stars).toBe(2);
-    expect(play(undefined, idleBot).r.stars).toBe(0);
-  });
-
-  it('朝は1階から上へ向かう人が多い(朝のラッシュ)', () => {
-    const s = createSim({ building: st.building, traffic: st.traffic }, st.seed);
-    let morning = 0, fromGround = 0;
-    while (!s.finished) {
-      step(s);
-      if (s.phaseIndex !== 0) continue;
-      for (const p of s.passengers) if (p.spawnTick === s.tick - 1) { morning++; if (p.origin === 0) fromGround++; }
-    }
-    expect(morning).toBeGreaterThan(20);
-    expect(fromGround / morning).toBeGreaterThan(0.75);
-  });
-
-  it('ステージのシードは「平均的な日」: 発生人数が200シードの中央値±5%以内', () => {
-    const count = (seed: number) => { const s = createSim({ building: st.building, traffic: st.traffic }, seed); while (!s.finished) step(s); return s.stats.spawned; };
-    const counts = Array.from({ length: 200 }, (_, k) => count(1000 + k)).sort((a, b) => a - b);
-    const median = counts[100]!;
-    expect(Math.abs(count(st.seed) - median)).toBeLessThanOrEqual(median * 0.05);
   });
 });

@@ -1,105 +1,85 @@
 // 使い方:
-//   node tools/calibrate.ts         ステージを各ボットで1日回し、時間帯ごとの数字と点数を出す
-//   node tools/calibrate.ts seeds   ステージに使うシードの候補を探す(平均的な日を選ぶため)
+//   node tools/calibrate.ts         各ステージで、手動相当のボットとカードの組み合わせを正式な採点(複数日の平均)で比べる
+//   node tools/calibrate.ts seeds   ステージに使うシード(画面で見せる日)の候補を探す
 import { createSim, step, type SimState } from '../src/sim/sim.ts';
 import { computeScore } from '../src/sim/score.ts';
 import { STAGES } from '../src/sim/stages.ts';
 import type { CardId } from '../src/sim/rules.ts';
+import { daySeed, rateRules, RATING_DAYS } from '../src/sim/evaluate.ts';
 import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from './bots.ts';
 
-function play(stageIdx: number, bot: Bot, seed?: number, rules?: CardId[][]) {
+/** 1日分を回す(ボットの操作つき) */
+function play(stageIdx: number, bot: Bot, seed: number, rules?: CardId[][]) {
   const st = STAGES[stageIdx]!;
-  const s: SimState = createSim({ building: st.building, traffic: st.traffic, rules }, seed ?? st.seed);
-  const perPhase = st.traffic.phases.map(() => ({ spawned: 0, missed: 0, delivered: 0, peakWaiting: 0 }));
-  let lastPhase = 0;
+  const s: SimState = createSim({ building: st.building, traffic: st.traffic, rules }, seed);
   while (!s.finished) {
-    const before = { ...s.stats };
     step(s, bot(s));
-    const ph = s.phaseIndex >= 0 ? s.phaseIndex : lastPhase;
-    lastPhase = ph;
-    const pp = perPhase[ph]!;
-    pp.spawned += s.stats.spawned - before.spawned;
-    pp.missed += s.stats.missed - before.missed;
-    pp.delivered += s.stats.delivered - before.delivered;
-    pp.peakWaiting = Math.max(pp.peakWaiting, s.passengers.filter((p) => p.state === 'waiting').length);
     if (s.tick > 100000) throw new Error('終わらない');
   }
-  return { s, perPhase, score: computeScore(s.stats, st.stars) };
+  return { s, score: computeScore(s.stats, st.stars) };
 }
 
 /** 較正で試すカードの組み合わせ(エレベーターの数ごと) */
 function ruleSetsFor(elevators: number): CardId[][][] {
-  if (elevators === 1) {
-    return [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['oldest', 'nearest'], ['sameDir', 'oldest'], ['sameDir', 'oldest', 'nearest']].map((r) => [r as CardId[]]);
-  }
+  const singles: CardId[][] = [
+    ['nearest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['urgent', 'nearest'],
+    ['sameDir', 'urgent', 'nearest'], ['nearest', 'home'], ['sameDir', 'nearest', 'home'],
+  ];
   const all = (r: CardId[]) => Array.from({ length: elevators }, () => r);
+  if (elevators === 1) return singles.map((r) => all(r));
   return [
-    all(['nearest']),
-    all(['sameDir', 'nearest']),
-    all(['oldest']),
-    all(['sameDir', 'nearest', 'home']),
+    ...singles.map((r) => all(r)),
+    [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']],
     [['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest']],
-    [['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'sameDir', 'nearest', 'home']],
-    [['zoneHigh', 'sameDir', 'nearest', 'home'], ['zoneLow', 'sameDir', 'nearest']],
     [['zoneLow', 'nearest', 'home'], ['zoneHigh', 'nearest', 'home']],
+    [['zoneLow', 'nearest'], ['nearest']],
   ];
 }
 
+/** 各ステージの比較(正式な採点と同じ RATING_DAYS 日分の平均) */
+function report(stageIdx: number): void {
+  const st = STAGES[stageIdx]!;
+  const seeds = Array.from({ length: RATING_DAYS }, (_, k) => daySeed(st.seed, k));
+  console.log(`== stage ${st.id}(星の閾値 ${st.stars.join(' / ')}。点は ${RATING_DAYS} 日平均)`);
+  const bots: [string, Bot][] = [['idle', idleBot], ['casual', everyTicks(greedyBot, 30)], ['greedy', greedyBot], ['expert', expertBot]];
+  for (const [name, bot] of bots) {
+    const scores = seeds.map((seed) => play(stageIdx, bot, seed).score.score);
+    const avg = Math.floor(scores.reduce((a, b) => a + b, 0) / scores.length);
+    console.log(`  手動相当 ${name.padEnd(7)} 平均=${String(avg).padStart(5)}  (画面の日=${scores[0]}、最小=${Math.min(...scores)}、最大=${Math.max(...scores)})`);
+  }
+  const rows = ruleSetsFor(st.building.elevators).map((rs) => ({ rs, r: rateRules(st, rs) }));
+  rows.sort((a, b) => b.r.score - a.r.score);
+  for (const { rs, r } of rows) {
+    const label = rs.map((r1) => r1.join(',')).join(' / ');
+    console.log(`  rules[${label}]`.padEnd(58) + ` 平均=${String(r.score).padStart(5)} 星=${r.stars}  (画面の日=${r.perDay[0]})`);
+  }
+}
+
 /**
- * シードの選び方: 固定シードの1日は運のぶれが大きい(上級者ボットが初心者ボットに負ける日もある)。
- * 発生人数が中央値に近く、ボット同士の点の比が平均に近いシードを選ぶ。
+ * シードの選び方: 正式な点は複数日の平均だが、画面で見せる日(0日目)が極端に軽い・重い日だと
+ * 遊んだ印象と点がずれる。発生人数が中央値に近いシードを選ぶ。
  */
 function pickSeeds(stageIdx: number): void {
   const st = STAGES[stageIdx]!;
-  const score = (seed: number, bot: Bot) => play(stageIdx, bot, seed).score.score;
-  const rows: { seed: number; spawned: number; e: number; g: number }[] = [];
+  const rows: { seed: number; spawned: number }[] = [];
   for (let seed = 1000; seed < 1200; seed++) {
-    const r = play(stageIdx, expertBot, seed);
-    rows.push({ seed, spawned: r.s.stats.spawned, e: r.score.score, g: score(seed, greedyBot) });
+    const s = createSim({ building: st.building, traffic: st.traffic }, seed);
+    while (!s.finished) step(s);
+    rows.push({ seed, spawned: s.stats.spawned });
   }
   const sp = rows.map((r) => r.spawned).sort((a, b) => a - b);
   const median = sp[100]!;
-  const avgRatio = rows.reduce((a, r) => a + r.e, 0) / rows.reduce((a, r) => a + r.g, 0);
-  const inverted = rows.filter((r) => r.e < r.g).length / rows.length;
-  console.log(`== stage ${st.id} シード候補(1000〜1199)`);
-  console.log(`発生人数の中央値=${median} 上級者/初心者の点の比(平均)=${avgRatio.toFixed(3)} 上級者が負けるシード=${(inverted * 100).toFixed(0)}%`);
+  console.log(`== stage ${st.id} シード候補(1000〜1199) 発生人数の中央値=${median}`);
   rows
-    .filter((r) => Math.abs(r.spawned - median) <= 2 && r.e > r.g)
-    .sort((a, b) => Math.abs(a.e / a.g - avgRatio) - Math.abs(b.e / b.g - avgRatio))
-    .slice(0, 5)
-    .forEach((r) => console.log(
-      `  seed=${r.seed} spawned=${r.spawned} 上級者=${r.e} 初心者=${r.g} 反応1秒遅い初心者=${score(r.seed, everyTicks(greedyBot, 30))} 比=${(r.e / r.g).toFixed(3)}`,
-    ));
+    .filter((r) => Math.abs(r.spawned - median) <= 1)
+    .slice(0, 8)
+    .forEach((r) => console.log(`  seed=${r.seed} spawned=${r.spawned}`));
 }
 
 // @types/node を入れないため、process は型なしで参照する(Node の実行専用ツール)
 const argv = (globalThis as unknown as { process: { argv: string[] } }).process.argv;
 
-if (argv[2] === 'seeds') {
-  for (let i = 0; i < STAGES.length; i++) pickSeeds(i);
-} else {
 for (let i = 0; i < STAGES.length; i++) {
-  console.log(`== stage ${STAGES[i]!.id}`);
-  for (const [name, bot] of [['idle', idleBot], ['casual', everyTicks(greedyBot, 30)], ['greedy', greedyBot], ['expert', expertBot]] as const) {
-    const r = play(i, bot);
-    const sc = r.score;
-    console.log(
-      `${name.padEnd(7)} score=${String(sc.score).padStart(5)} stars=${sc.stars} delivered=${sc.delivered} missed=${sc.missed} ` +
-      `avgWait=${sc.avgWaitSec.toFixed(1)}s ticks=${r.s.tick}`,
-    );
-    r.perPhase.forEach((p, k) => console.log(`   phase${k}: spawned=${p.spawned} delivered=${p.delivered} missed=${p.missed} peakWaiting=${p.peakWaiting}`));
-  }
-  // ルールのカードだけで自動運転(手動操作なし)
-  for (const rs of ruleSetsFor(STAGES[i]!.building.elevators)) {
-    const r = play(i, idleBot, undefined, rs);
-    const avg = Array.from({ length: 20 }, (_, k) => play(i, idleBot, 5000 + k, rs).score.score).reduce((a, b) => a + b, 0) / 20;
-    const label = rs.map((r1) => r1.join(',')).join(' / ');
-    console.log(`rules[${label}]`.padEnd(52) + ` score=${String(r.score.score).padStart(5)} stars=${r.score.stars} missed=${r.score.missed} avgWait=${r.score.avgWaitSec.toFixed(1)}s  20seeds平均=${Math.round(avg)}`);
-  }
-  // シードによるばらつき(同じステージを別シードで)
-  for (const [name, bot] of [['greedy', greedyBot], ['expert', expertBot]] as const) {
-    const scores = Array.from({ length: 20 }, (_, k) => play(i, bot, 5000 + k).score.score).sort((a, b) => a - b);
-    console.log(`${name} 20seeds: min=${scores[0]} median=${scores[10]} max=${scores[19]}`);
-  }
-}
+  if (argv[2] === 'seeds') pickSeeds(i);
+  else report(i);
 }

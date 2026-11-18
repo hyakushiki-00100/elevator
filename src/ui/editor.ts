@@ -34,7 +34,7 @@ export function fitRules(rules: RuleSet, elevators: number, slotCount: number, u
 export const UNLOCK_STEPS: readonly (readonly CardId[])[] = [
   ['nearest'],
   ['sameDir'],
-  ['oldest'],
+  ['urgent'],
   ['home'],
   ['zoneLow', 'zoneHigh'],
 ];
@@ -47,9 +47,11 @@ export function nextUnlock(unlocked: readonly CardId[], steps: readonly (readonl
   return [];
 }
 
-/** カードを3枚持ったら(=3日遊んだら)ステージ2(2基)が開く */
-export function stagesOpen(unlocked: readonly CardId[], totalStages: number): number {
-  return Math.min(totalStages, unlocked.length >= 3 ? 2 : 1);
+/** 開いているステージの数(ステージは opensAt の小さい順に並んでいる前提) */
+export function stagesOpen(unlocked: readonly CardId[], stages: readonly { opensAt: number }[]): number {
+  let n = 0;
+  for (const s of stages) if (s.opensAt <= unlocked.length) n++;
+  return Math.max(1, n);
 }
 
 export function slotCountFor(unlocked: readonly CardId[]): number {

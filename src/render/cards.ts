@@ -6,7 +6,7 @@ import { fillCircle, roundRect } from './icons.ts';
 export const CARD_COLORS: Record<CardId, string> = {
   nearest: '#249e91',
   sameDir: '#d9782f',
-  oldest: '#7d5ccc',
+  urgent: '#7d5ccc',
   home: '#3b7fd1',
   zoneLow: '#55607a',
   zoneHigh: '#55607a',

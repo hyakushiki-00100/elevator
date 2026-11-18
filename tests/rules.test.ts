@@ -12,7 +12,8 @@ function ctx(over: Partial<RuleContext> & { floors?: number } = {}): RuleContext
     floors,
     heading: 1,
     hall: new Array(floors).fill(false),
-    oldestSpawn: new Array(floors).fill(Infinity),
+    remain: new Array(floors).fill(Infinity),
+    urgent: new Array(floors).fill(false),
     car: new Array(floors).fill(false),
     includeCur: false,
     ...over,
@@ -38,23 +39,24 @@ describe('カード単体の判断', () => {
     expect(CARDS.sameDir(ctx({ hall: set(6, [1]), heading: -1 }))).toBe(1);
   });
 
-  it('長く待っている階を優先: 一番早く来た人の階。同じなら近い階', () => {
-    const os = [Infinity, 50, Infinity, Infinity, 10, Infinity];
-    expect(CARDS.oldest(ctx({ hall: set(6, [1, 4]), oldestSpawn: os }))).toBe(4);
-    const tie = [Infinity, 10, Infinity, Infinity, 10, Infinity];
-    expect(CARDS.oldest(ctx({ hall: set(6, [1, 4]), oldestSpawn: tie }))).toBe(1);
-    expect(CARDS.oldest(ctx())).toBeNull();
+  it('限界が近い人を優先: 我慢が半分を切った人の階のうち残りが一番少ない階。いなければ当てはまらない', () => {
+    const remain = [Infinity, 100, Infinity, Infinity, 40, Infinity];
+    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1, 4]), remain }))).toBe(4);
+    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1]), remain }))).toBe(1);
+    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), remain }))).toBeNull();
+    const tie = [Infinity, 50, Infinity, Infinity, 50, Infinity];
+    expect(CARDS.urgent(ctx({ hall: set(6, [1, 4]), urgent: set(6, [1, 4]), remain: tie }))).toBe(1); // 同じなら近い階
   });
 
   it('待機中(includeCur)なら、今いる階の乗れる人が最優先。扉が閉まった直後は今いる階を選ばない', () => {
-    const c = { hall: set(6, [2, 3]), oldestSpawn: [Infinity, Infinity, 5, 1, Infinity, Infinity] };
-    // 長く待つ人を優先するカードは、より長く待つ人(3階)を選ぶ。1階で待つ・担当範囲は呼び出しがあれば当てはまらない
+    const c = { hall: set(6, [2, 3]), urgent: set(6, [2, 3]), remain: [Infinity, Infinity, 50, 10, Infinity, Infinity] };
+    // 限界が近い人を優先するカードは、残りが少ない人(3階)を選ぶ。1階で待つ・担当範囲は呼び出しがあれば当てはまらない
     for (const id of ['nearest', 'sameDir'] as const) {
       expect(CARDS[id](ctx({ ...c, includeCur: true }))).toBe(2);
       expect(CARDS[id](ctx({ ...c, includeCur: false }))).toBe(3);
     }
-    expect(CARDS.oldest(ctx({ ...c, includeCur: true }))).toBe(3);
-    expect(CARDS.oldest(ctx({ ...c, includeCur: false }))).toBe(3);
+    expect(CARDS.urgent(ctx({ ...c, includeCur: true }))).toBe(3);
+    expect(CARDS.urgent(ctx({ ...c, includeCur: false }))).toBe(3);
   });
 });
 
@@ -162,7 +164,7 @@ describe('ルールで動くエレベーター', () => {
   });
 
   it('乗っている人の降りる階は、カードに関係なく途中で必ず止まる', () => {
-    const s = sim([['oldest']]);
+    const s = sim([['urgent']]);
     const e = s.elevators[0]!;
     addPassenger(s, 0, 1); // 乗ったら2階で降りたい
     step(s);              // 1階で扉を開けて乗せる
@@ -203,7 +205,7 @@ describe('ルールで動くエレベーター', () => {
 });
 
 describe('ルールでの長時間運転(不変条件)', () => {
-  const combos: CardId[][] = [['nearest'], ['sameDir'], ['oldest'], ['sameDir', 'nearest'], ['oldest', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'home', 'oldest']];
+  const combos: CardId[][] = [['nearest'], ['sameDir'], ['urgent'], ['sameDir', 'nearest'], ['urgent', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'home'], ['zoneHigh', 'home', 'urgent']];
   for (const rs of combos) {
     it(`[${rs.join(',')}] 2基: 定員超過なし・乗った人は60秒以内に降りる・決定的`, () => {
       const run = () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_ORDER } from '../src/sim/rules.ts';
+import { STAGES } from '../src/sim/stages.ts';
 import { EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, slotRect, stageTabHit, stageTabRect } from '../src/render/layout.ts';
 import { fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
 
@@ -10,13 +11,13 @@ describe('カードの編集(純粋な関数)', () => {
     expect(placeCard(r, 0, 'nearest', 2)).toBe(r);
     r = placeCard(r, 0, 'sameDir', 2);
     expect(r).toEqual([['nearest', 'sameDir']]);
-    expect(placeCard(r, 0, 'oldest', 2)).toBe(r);
-    expect(placeCard(r, 5, 'oldest', 3)).toBe(r); // 存在しない行
+    expect(placeCard(r, 0, 'urgent', 2)).toBe(r);
+    expect(placeCard(r, 5, 'urgent', 3)).toBe(r); // 存在しない行
   });
 
   it('外す: 下のカードが詰まる。範囲外は何もしない', () => {
-    const r = [['sameDir', 'nearest', 'oldest'] as const].map((x) => [...x]);
-    expect(removeCard(r, 0, 0)).toEqual([['nearest', 'oldest']]);
+    const r = [['sameDir', 'nearest', 'urgent'] as const].map((x) => [...x]);
+    expect(removeCard(r, 0, 0)).toEqual([['nearest', 'urgent']]);
     expect(removeCard(r, 0, 3)).toBe(r);
     expect(removeCard(r, 1, 0)).toBe(r);
   });
@@ -29,14 +30,14 @@ describe('カードの編集(純粋な関数)', () => {
   });
 
   it('fitRules: エレベーターの数に合わせ、枠の数・持っていないカードを落とす', () => {
-    expect(fitRules([['nearest', 'sameDir', 'oldest']], 2, 2, ['nearest', 'sameDir', 'oldest'])).toEqual([['nearest', 'sameDir'], []]);
-    expect(fitRules([['oldest', 'nearest']], 1, 3, ['nearest'])).toEqual([['nearest']]);
+    expect(fitRules([['nearest', 'sameDir', 'urgent']], 2, 2, ['nearest', 'sameDir', 'urgent'])).toEqual([['nearest', 'sameDir'], []]);
+    expect(fitRules([['urgent', 'nearest']], 1, 3, ['nearest'])).toEqual([['nearest']]);
   });
 
   it('進行: カードを順に1枚ずつ手に入れ、枠の数は持っているカードの数', () => {
     expect(nextUnlock([])).toEqual(['nearest']);
     expect(nextUnlock(['nearest'])).toEqual(['sameDir']);
-    expect(nextUnlock(['nearest', 'sameDir', 'oldest', 'home'])).toEqual(['zoneLow', 'zoneHigh']);
+    expect(nextUnlock(['nearest', 'sameDir', 'urgent', 'home'])).toEqual(['zoneLow', 'zoneHigh']);
     expect(nextUnlock([...CARD_ORDER])).toEqual([]);
     // 手に入る順番に全カードが1回ずつ出てくる
     expect(UNLOCK_STEPS.flat().slice().sort()).toEqual([...CARD_ORDER].sort());
@@ -45,11 +46,13 @@ describe('カードの編集(純粋な関数)', () => {
     expect(slotCountFor([...CARD_ORDER])).toBe(5);
   });
 
-  it('ステージ2はカードを3枚持つと開く', () => {
-    expect(stagesOpen([], 2)).toBe(1);
-    expect(stagesOpen(['nearest', 'sameDir'], 2)).toBe(1);
-    expect(stagesOpen(['nearest', 'sameDir', 'oldest'], 2)).toBe(2);
-    expect(stagesOpen(['nearest', 'sameDir', 'oldest'], 1)).toBe(1);
+  it('ステージは持っているカードの枚数で開く(ステージ2は3枚、ステージ3は全6枚)', () => {
+    expect(stagesOpen([], STAGES)).toBe(1);
+    expect(stagesOpen(['nearest', 'sameDir'], STAGES)).toBe(1);
+    expect(stagesOpen(['nearest', 'sameDir', 'urgent'], STAGES)).toBe(2);
+    expect(stagesOpen([...CARD_ORDER], STAGES)).toBe(3);
+    // 開く順に並んでいる
+    for (let i = 1; i < STAGES.length; i++) expect(STAGES[i]!.opensAt).toBeGreaterThanOrEqual(STAGES[i - 1]!.opensAt);
   });
 });
 

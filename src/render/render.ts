@@ -9,7 +9,7 @@ import {
 } from './layout.ts';
 import { drawCard, drawEmptySlot } from './cards.ts';
 import {
-  drawNumber, fillCircle, iconCheck, iconClock, iconCross, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
+  drawNumber, fillCircle, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
 
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
@@ -38,6 +38,19 @@ export interface Effect {
 
 export type Mode = 'ready' | 'playing' | 'result';
 
+/** 1日の終わりの正式な結果 */
+export interface DayResult {
+  /** 正式な点と星 */
+  score: number;
+  stars: 0 | 1 | 2 | 3;
+  /** rated: カードだけで動かした日(複数日の平均) / manual: 手動を使った日(その日の点) */
+  basis: 'rated' | 'manual';
+  /** 平均を取った日数(rated のとき) */
+  days: number;
+  /** 画面で見た日の点 */
+  dayScore: number;
+}
+
 export interface DrawArgs {
   ctx: CanvasRenderingContext2D;
   cssW: number;
@@ -65,6 +78,8 @@ export interface DrawArgs {
   editRow: number;
   /** この日に手に入れたカード(結果画面に出す) */
   newCards: readonly CardId[];
+  /** 1日の終わりの正式な結果(結果画面のときだけ) */
+  result: DayResult | null;
   /** 編集画面のステージ選択: 開いているステージ数・選択中・各ステージの最高の星 */
   stagesOpen: number;
   stageIdx: number;
@@ -100,7 +115,7 @@ export function draw(a: DrawArgs): void {
     if (a.unlocked.length === 0) drawStart(ctx, a.now);
     else drawEditor(ctx, a);
   }
-  if (a.mode === 'result') drawResult(ctx, a.score, a.now - a.modeSince, a.newCards);
+  if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
   ctx.restore();
 }
 
@@ -477,7 +492,9 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   iconPlay(ctx, b.x + b.w / 2 + 3, b.y + b.h / 2, b.w / 2);
 }
 
-function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: number, newCards: readonly CardId[]): void {
+function drawResult(
+  ctx: CanvasRenderingContext2D, sc: ScoreResult, res: DayResult, sinceMs: number, newCards: readonly CardId[],
+): void {
   dim(ctx);
   const p = RESULT_PANEL;
   ctx.fillStyle = '#1f2330';
@@ -488,11 +505,20 @@ function drawResult(ctx: CanvasRenderingContext2D, sc: ScoreResult, sinceMs: num
   // 星: 1つずつ順に現れる
   for (let i = 0; i < 3; i++) {
     const appear = Math.max(0, Math.min(1, (sinceMs - 250 - i * 300) / 250));
-    const filled = sc.stars > i && appear > 0;
+    const filled = res.stars > i && appear > 0;
     const scale = filled ? 0.6 + 0.4 * appear + 0.15 * Math.sin(Math.PI * appear) : 1;
     iconStar(ctx, cx + (i - 1) * 84, p.y + 70 + (i === 1 ? -10 : 0), 32 * scale, filled);
   }
-  drawNumber(ctx, String(sc.score), cx, p.y + 170, 52, '#ffd34d');
+  // 正式な点。左に根拠(カレンダー=複数日の平均 / 指=手動を使った日の点)
+  drawNumber(ctx, String(res.score), cx, p.y + 170, 52, '#ffd34d');
+  if (res.basis === 'rated') {
+    iconCalendar(ctx, cx - 125, p.y + 152, 20, res.days);
+    // 右に、画面で見た日の点(カレンダー「1」)
+    iconCalendar(ctx, cx + 118, p.y + 152, 13, 1, 'rgba(159,179,255,0.7)');
+    drawNumber(ctx, String(res.dayScore), cx + 140, p.y + 160, 18, 'rgba(255,255,255,0.7)', 'left');
+  } else {
+    iconFinger(ctx, cx - 125, p.y + 152, 22);
+  }
 
   const y = p.y + 225;
   const cols = [cx - 140, cx, cx + 140];

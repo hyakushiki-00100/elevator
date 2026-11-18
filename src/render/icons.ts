@@ -172,3 +172,25 @@ export function iconPhase(ctx: CanvasRenderingContext2D, phase: number, x: numbe
   ctx.closePath();
   ctx.fill();
 }
+
+/** カレンダー(複数日の平均で採点したことを示す)。数字は日数 */
+export function iconCalendar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, days: number, color = '#9fb3ff'): void {
+  const w = r * 1.7, h = r * 1.6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, r * 0.14);
+  roundRect(ctx, x - w / 2, y - h / 2, w, h, r * 0.2);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillRect(x - w / 2, y - h / 2, w, h * 0.26);
+  // 綴じ具
+  ctx.fillRect(x - w * 0.28, y - h / 2 - r * 0.2, r * 0.16, r * 0.34);
+  ctx.fillRect(x + w * 0.28 - r * 0.16, y - h / 2 - r * 0.2, r * 0.16, r * 0.34);
+  drawNumber(ctx, String(days), x, y + h * 0.36, r * 0.85, color);
+}
+
+/** 指(手動で操作したことを示す) */
+export function iconFinger(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color = '#f5d0b0'): void {
+  fillCircle(ctx, x, y - r * 0.35, r * 0.42, color);
+  ctx.fillStyle = color;
+  ctx.fillRect(x - r * 0.42, y - r * 0.35, r * 0.84, r * 1.1);
+}
