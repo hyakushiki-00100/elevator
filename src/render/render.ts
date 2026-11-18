@@ -359,9 +359,15 @@ function drawPanel(
     iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 46, y, 17, sc.score >= th[i]!);
   }
 
-  // 運行ルールの枠(今動きを決めているカードを白枠で示す)
-  const cw = 36, ch = 47, gap = 8;
-  let ry = 420;
+  // 運行ルールの枠(今動きを決めているカードを白枠で示す)。
+  // 星の下からパネルの下端までに、エレベーターの数だけ段を収める(段が多ければカードを縮める)
+  const rowsTop = 400;
+  const rowsBottom = LOGICAL_H - 16 - 8; // パネルの下端 − 白枠の分
+  const rowCount = s.elevators.filter((e) => e.rules.length > 0).length;
+  const gap = 8;
+  const ch = Math.min(47, rowCount > 0 ? (rowsBottom - rowsTop - (rowCount - 1) * gap) / rowCount : 47);
+  const cw = ch * (36 / 47);
+  let ry = rowsTop;
   for (const e of s.elevators) {
     if (e.rules.length === 0) continue;
     const total = e.rules.length * cw + (e.rules.length - 1) * gap;
@@ -369,8 +375,7 @@ function drawPanel(
     e.rules.forEach((c, i) => drawCard(ctx, c, x0 + i * (cw + gap), ry, cw, ch, { active: e.ruleIndex === i }));
     // 2基以上なら、行の左にエレベーターの番号
     if (s.elevators.length > 1) drawNumber(ctx, String(e.id + 1), PANEL_X + 18, ry + ch / 2 + 6, 15, 'rgba(255,255,255,0.6)');
-    ry += ch + 10;
-    if (ry > LOGICAL_H - 30) break;
+    ry += ch + gap;
   }
 }
 

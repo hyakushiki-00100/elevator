@@ -6,7 +6,8 @@ import { computeScore } from '../src/sim/score.ts';
 import { STAGES } from '../src/sim/stages.ts';
 import type { CardId } from '../src/sim/rules.ts';
 import { daySeed, rateRules, RATING_DAYS } from '../src/sim/evaluate.ts';
-import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from './bots.ts';
+import { everyTicks, expertBot, greedyBot, idleBot, type Bot } from '../tests/bot/bots.ts';
+import { presetsFor } from '../tests/bot/presets.ts';
 
 /** 1日分を回す(ボットの操作つき) */
 function play(stageIdx: number, bot: Bot, seed: number, rules?: CardId[][]) {
@@ -19,21 +20,9 @@ function play(stageIdx: number, bot: Bot, seed: number, rules?: CardId[][]) {
   return { s, score: computeScore(s.stats, st.stars) };
 }
 
-/** 較正で試すカードの組み合わせ(エレベーターの数ごと) */
+/** 較正で試すカードの組み合わせ(自動プレイボットの preset-rules と同じ一覧) */
 function ruleSetsFor(elevators: number): CardId[][][] {
-  const singles: CardId[][] = [
-    ['nearest'], ['sameDir', 'nearest'], ['nearest', 'sameDir'], ['urgent', 'nearest'],
-    ['sameDir', 'urgent', 'nearest'], ['nearest', 'home'], ['sameDir', 'nearest', 'home'],
-  ];
-  const all = (r: CardId[]) => Array.from({ length: elevators }, () => r);
-  if (elevators === 1) return singles.map((r) => all(r));
-  return [
-    ...singles.map((r) => all(r)),
-    [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']],
-    [['zoneLow', 'sameDir', 'nearest'], ['zoneHigh', 'sameDir', 'nearest']],
-    [['zoneLow', 'nearest', 'home'], ['zoneHigh', 'nearest', 'home']],
-    [['zoneLow', 'nearest'], ['nearest']],
-  ];
+  return presetsFor(elevators).map((p) => p.rules);
 }
 
 /** 各ステージの比較(正式な採点と同じ RATING_DAYS 日分の平均) */

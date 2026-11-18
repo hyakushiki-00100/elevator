@@ -1,6 +1,7 @@
-// 較正とテスト用の自動操作(ゲームの機能ではない)。sim の公開APIだけを使う。
-import { UNITS_PER_FLOOR } from '../src/sim/building.ts';
-import type { Command, SimState } from '../src/sim/sim.ts';
+// 自動プレイボット(ゲームの機能ではない)。画面なしで sim を直接動かす。sim の公開APIだけを使う。
+// CLAUDE.md 6章「完了前の自動確認」の idle / greedy-manual はここ。preset-rules は presets.ts。
+import { UNITS_PER_FLOOR } from '../../src/sim/building.ts';
+import type { Command, SimState } from '../../src/sim/sim.ts';
 
 export type Bot = (s: SimState) => Command[];
 

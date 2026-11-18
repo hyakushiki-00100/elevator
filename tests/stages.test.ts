@@ -5,7 +5,7 @@ import { STAGES, type Stage } from '../src/sim/stages.ts';
 import { daySeed, playDay, rateRules, RATING_DAYS } from '../src/sim/evaluate.ts';
 import { dayTicks } from '../src/sim/traffic.ts';
 import type { CardId } from '../src/sim/rules.ts';
-import { expertBot, greedyBot, idleBot, type Bot } from '../tools/bots.ts';
+import { expertBot, greedyBot, idleBot, type Bot } from './bot/bots.ts';
 
 /** 手動相当のボットの、正式な採点と同じ日々での平均 */
 function botAverage(st: Stage, bot: Bot): number {

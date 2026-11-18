@@ -3,7 +3,7 @@ import { makeBuilding } from '../src/sim/building.ts';
 import { addPassenger, createSim, stateHash, step } from '../src/sim/sim.ts';
 import { computeScore, deliveryPoints, PENALTY_PER_MISS, POINTS_MAX, POINTS_MIN } from '../src/sim/score.ts';
 import { dayTicks, makePhase, phaseAt, phaseIndexAt, rateAt, type DayPlan } from '../src/sim/traffic.ts';
-import { greedyBot } from '../tools/bots.ts';
+import { greedyBot } from './bot/bots.ts';
 
 function plan(phases: Parameters<typeof makePhase>[0][], overtimeTicks = 0): DayPlan {
   return { phases: phases.map((p) => makePhase(p)), overtimeTicks };

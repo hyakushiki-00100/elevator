@@ -13,6 +13,13 @@ import {
   fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
 
+/**
+ * 検証用の仕組み(URLの指定と window.__dev)を有効にするか。
+ * 開発サーバーと、撮影専用ビルド(vite build --mode screenshot)だけで有効。
+ * 通常の本番ビルドでは false に置き換わり、仕組みごと取り除かれる。
+ */
+const DEBUG_HOOKS = import.meta.env.DEV || import.meta.env.MODE === 'screenshot';
+
 const canvas = document.createElement('canvas');
 document.getElementById('app')!.append(canvas);
 const ctx = canvas.getContext('2d')!;
@@ -27,9 +34,9 @@ const rulesByStage: RuleSet[] = STAGES.map((s) => fitRules([], s.building.elevat
 /** ステージごとの最高の星 */
 const bestStars: number[] = STAGES.map(() => 0);
 
-// 開発時だけ、URLで状態を変えて確認できる(例: ?cards=all&stage=2&elevators=3)。本番ビルドでは無効。
+// 検証時だけ、URLで状態を変えて確認できる(例: ?cards=all&stage=2&elevators=3)。本番ビルドでは無効。
 let devBuilding: { floors?: number; elevators?: number } = {};
-if (import.meta.env.DEV) {
+if (DEBUG_HOOKS) {
   const q = new URLSearchParams(location.search);
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
   devBuilding = { floors: num('floors'), elevators: num('elevators') };
@@ -256,8 +263,8 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-// 開発時だけ、検証用に状態を覗けるようにする(本番ビルドには含まれない)
-if (import.meta.env.DEV) {
+// 検証時だけ、状態を覗いたり操作したりできるようにする(本番ビルドには含まれない)
+if (DEBUG_HOOKS) {
   (window as unknown as Record<string, unknown>).__dev = {
     get state() { return state; },
     get mode() { return mode; },
@@ -268,5 +275,12 @@ if (import.meta.env.DEV) {
     addPassenger,
     /** 検証用: 時間を早送りする */
     fastForward(ticks: number) { for (let i = 0; i < ticks && !state.finished; i++) step(state); },
+    /** 検証用: 今のステージのルールを置き換える(1日の開始前に使う) */
+    setRules(rules: CardId[][]) {
+      rulesByStage[stageIdx] = fitRules(rules, stage().building.elevators, slotCountFor(unlocked), unlocked);
+      newDay();
+    },
+    /** 検証用: 編集画面・最初の画面から1日を始める */
+    start() { newDay(); setMode('playing'); },
   };
 }
