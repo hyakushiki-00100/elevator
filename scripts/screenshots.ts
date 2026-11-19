@@ -69,7 +69,8 @@ const CONTENT_RATIO = `(() => {
   }
   return total === 0 ? 0 : n / total;
 })()`;
-const MIN_CONTENT = 0.05;
+// 一色だけの画面なら 0%。暗いテーマ(D4)の縦長では、描画があっても 4〜5% 程度にしかならないため、基準は 1% にする
+const MIN_CONTENT = 0.01;
 
 const server = await preview({ preview: { port: 4179, strictPort: true }, build: { outDir: 'out/build-screenshot' } });
 const base = server.resolvedUrls?.local[0] ?? 'http://localhost:4179/';

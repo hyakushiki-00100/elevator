@@ -67,7 +67,7 @@ export function iconCross(ctx: CanvasRenderingContext2D, x: number, y: number, r
 
 /** 待ち時間: 時計 */
 export function iconClock(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.strokeStyle = '#9fb3ff';
+  ctx.strokeStyle = theme().info;
   ctx.lineWidth = Math.max(2, r * 0.2);
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -180,7 +180,7 @@ export function iconPhase(ctx: CanvasRenderingContext2D, phase: number, x: numbe
 }
 
 /** カレンダー(複数日の平均で採点したことを示す)。数字は日数 */
-export function iconCalendar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, days: number, color = '#9fb3ff'): void {
+export function iconCalendar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, days: number, color = theme().info): void {
   const w = r * 1.7, h = r * 1.6;
   ctx.strokeStyle = color;
   ctx.lineWidth = Math.max(2, r * 0.14);

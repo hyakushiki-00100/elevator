@@ -1,5 +1,7 @@
 // ルールの共有の窓(書き出し・読み込み)。共有文字列を選んだり貼り付けたりするため、キャンバスではなく HTML の入力欄を使う。
 // 文字によるラベルや説明は使わない(ボタンは図形の SVG のみ)。共有文字列そのものはデータなので表示する。
+// 色はゲームのテーマ(render/theme.ts)に合わせる。
+import { theme } from '../render/theme.ts';
 
 export type Feedback = 'ok' | 'partial' | 'error';
 
@@ -47,7 +49,7 @@ export function openShareDialog(opts: Options): void {
   });
   const panel = document.createElement('div');
   Object.assign(panel.style, {
-    background: '#1f2330', borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column',
+    background: theme().dialogBg, border: `1px solid ${theme().floorLine}`, borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column',
     gap: '14px', alignItems: 'center', width: 'min(92vw, 460px)', boxSizing: 'border-box',
   });
   const input = document.createElement('textarea');
@@ -56,15 +58,15 @@ export function openShareDialog(opts: Options): void {
   input.autocapitalize = 'characters';
   Object.assign(input.style, {
     width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
-    fontSize: '22px', letterSpacing: '1px', textAlign: 'center', color: '#fff', background: '#14161c',
-    border: '2px solid #3a4156', borderRadius: '8px', padding: '10px', outline: 'none',
+    fontSize: '22px', letterSpacing: '1px', textAlign: 'center', color: theme().text, background: theme().bg,
+    border: `2px solid ${theme().button}`, borderRadius: '8px', padding: '10px', outline: 'none',
   });
   const status = document.createElement('div');
   Object.assign(status.style, { height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' });
   const row = document.createElement('div');
   Object.assign(row.style, { display: 'flex', gap: '18px', justifyContent: 'center' });
 
-  const closeBtn = button(SVG.close, '#3a4156');
+  const closeBtn = button(SVG.close, theme().button);
   closeBtn.onclick = closeShareDialog;
   const show = (fb: Feedback | null): void => {
     status.innerHTML = fb === 'ok' ? SVG.okMark : fb === 'partial' ? SVG.warnMark : fb === 'error' ? SVG.errMark : '';
@@ -73,7 +75,7 @@ export function openShareDialog(opts: Options): void {
   if (opts.mode === 'export') {
     input.value = opts.code;
     input.readOnly = true;
-    const copyBtn = button(SVG.copy, '#4f7ff0');
+    const copyBtn = button(SVG.copy, theme().buttonActive);
     const copy = async (): Promise<void> => {
       input.select();
       try {

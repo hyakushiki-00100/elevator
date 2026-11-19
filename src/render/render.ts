@@ -634,7 +634,7 @@ function drawResult(
   if (res.basis === 'rated') {
     iconCalendar(ctx, cx - 125, p.y + 152, 20, res.days);
     // 右に、画面で見た日の点(カレンダー「1」)
-    iconCalendar(ctx, cx + 118, p.y + 152, 13, 1, 'rgba(159,179,255,0.7)');
+    iconCalendar(ctx, cx + 118, p.y + 152, 13, 1, T().textDim);
     drawNumber(ctx, String(res.dayScore), cx + 140, p.y + 160, 18, T().textDim, 'left');
   } else {
     iconFinger(ctx, cx - 125, p.y + 152, 22);
@@ -650,7 +650,7 @@ function drawResult(
   drawNumber(ctx, sc.avgWaitSec.toFixed(1), cols[2]! + 4, y + 9, 26, T().text, 'left');
 
   const b = RETRY_BUTTON;
-  fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2, '#4f7ff0');
+  fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2, T().buttonActive);
   iconRetry(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w / 2);
 
   // 新しく手に入れたカード: 星のあとに光りながら現れる
