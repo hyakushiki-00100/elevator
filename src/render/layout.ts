@@ -179,5 +179,12 @@ export function shareButtonHit(x: number, y: number): 'export' | 'import' | null
   return null;
 }
 
+/** 進行状況を消すボタン(最下段、共有ボタンと開始ボタンの間。ごみ箱の絵) */
+export const RESET_BUTTON: Rect = { x: 740, y: 454, w: 48, h: 48 };
+/** 消す前の確かめの窓と、その中の「やめる」「消す」ボタン */
+export const RESET_PANEL: Rect = { x: 330, y: 150, w: 300, h: 240 };
+export const RESET_NO: Rect = { x: 360, y: 290, w: 80, h: 80 };
+export const RESET_YES: Rect = { x: 520, y: 290, w: 80, h: 80 };
+
 /** 消音ボタン(右のパネルの右上。どの画面でも押せる) */
 export const MUTE_BUTTON: Rect = { x: 900, y: 20, w: 36, h: 36 };

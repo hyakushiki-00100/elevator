@@ -6,13 +6,13 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, START_DEMO, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
+  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, START_DEMO, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
   EDITOR_PREVIEW, type Layout, type Rect, type View,
 } from './layout.ts';
 import { CARD_LOOP_MS, drawCard, drawEmptySlot } from './cards.ts';
 import { theme } from './theme.ts';
 import {
-  drawBuildingIcon, drawCarIcon, drawNumber, drawPointer, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
+  drawBuildingIcon, drawCarIcon, iconTrash, drawNumber, drawPointer, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
 
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
@@ -99,6 +99,8 @@ export interface DrawArgs {
   stagesOpen: number;
   stageIdx: number;
   bestStars: readonly number[];
+  /** 進行状況を消す前の確かめの窓を出しているか */
+  confirmReset: boolean;
   /** 1日目の最初の数回: 待っている人の階を指で示す */
   playHint: boolean;
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
@@ -132,6 +134,7 @@ export function draw(a: DrawArgs): void {
   if (a.mode === 'ready') {
     if (a.unlocked.length === 0) drawStart(ctx, a.now);
     else drawEditor(ctx, a);
+    if (a.confirmReset) drawResetConfirm(ctx);
   }
   if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
   // 消音ボタン(どの画面でも一番上に)
@@ -693,6 +696,15 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     }
   }
 
+  // 進行状況を消す(ごみ箱)。押すと確かめの窓が出る
+  {
+    const rb = RESET_BUTTON;
+    ctx.fillStyle = T().button;
+    roundRect(ctx, rb.x, rb.y, rb.w, rb.h, 6);
+    ctx.fill();
+    iconTrash(ctx, rb.x + rb.w / 2, rb.y + rb.h / 2, rb.w * 0.3, T().textDim);
+  }
+
   const b = EDITOR_PLAY;
   const pulse = 1 + 0.04 * Math.sin(a.now / 250);
   fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, (b.w / 2) * pulse, '#3fbf6a');
@@ -703,6 +715,37 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     const target = a.editorHint.kind === 'hand' ? handRect(a.editorHint.index) : slotRect(a.editorHint.row, a.editorHint.index);
     const phase = (a.now % 1200) / 1200;
     drawPointer(ctx, target.x + target.w * 0.55, target.y + target.h * 0.55, 46, phase > 0.5 && phase < 0.75);
+  }
+}
+
+/** 進行状況を消す前の確かめ: 大きなごみ箱と、手に入れたカード・星が消える絵、「やめる(×)」「消す(✓)」 */
+function drawResetConfirm(ctx: CanvasRenderingContext2D): void {
+  dim(ctx);
+  const p = RESET_PANEL;
+  ctx.fillStyle = T().dialogBg;
+  roundRect(ctx, p.x, p.y, p.w, p.h, 14);
+  ctx.fill();
+  ctx.strokeStyle = '#e5484d';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // 星とカード → ごみ箱
+  iconStar(ctx, p.x + 70, p.y + 70, 18, true);
+  ctx.fillStyle = '#249e91';
+  roundRect(ctx, p.x + 100, p.y + 48, 32, 44, 5);
+  ctx.fill();
+  ctx.fillStyle = T().text;
+  ctx.fillRect(p.x + 150, p.y + 68, 40, 4);
+  ctx.beginPath();
+  ctx.moveTo(p.x + 200, p.y + 70); ctx.lineTo(p.x + 188, p.y + 62); ctx.lineTo(p.x + 188, p.y + 78);
+  ctx.closePath();
+  ctx.fill();
+  iconTrash(ctx, p.x + 240, p.y + 72, 26, '#e5484d');
+  for (const [r, yes] of [[RESET_NO, false], [RESET_YES, true]] as const) {
+    ctx.fillStyle = T().button;
+    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+    ctx.fill();
+    if (yes) iconCheck(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.32);
+    else iconCross(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.32);
   }
 }
 

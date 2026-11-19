@@ -379,3 +379,25 @@ export function drawBuildingIcon(
     ctx.fillRect(sx, y + 1, sw, h - 2);
   }
 }
+
+/** ごみ箱(進行状況を消す)。中心 (x, y)、大きさ r */
+export function iconTrash(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, r * 0.14);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // ふた・取っ手
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.85, y - r * 0.6); ctx.lineTo(x + r * 0.85, y - r * 0.6);
+  ctx.moveTo(x - r * 0.3, y - r * 0.6); ctx.lineTo(x - r * 0.3, y - r * 0.85);
+  ctx.lineTo(x + r * 0.3, y - r * 0.85); ctx.lineTo(x + r * 0.3, y - r * 0.6);
+  ctx.stroke();
+  // 本体と縦の線
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.65, y - r * 0.45); ctx.lineTo(x - r * 0.5, y + r * 0.9);
+  ctx.lineTo(x + r * 0.5, y + r * 0.9); ctx.lineTo(x + r * 0.65, y - r * 0.45);
+  ctx.moveTo(x - r * 0.2, y - r * 0.25); ctx.lineTo(x - r * 0.2, y + r * 0.65);
+  ctx.moveTo(x + r * 0.2, y - r * 0.25); ctx.lineTo(x + r * 0.2, y + r * 0.65);
+  ctx.stroke();
+}

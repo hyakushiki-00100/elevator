@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  emptySave, loadSave, parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, writeSave, type KeyValueStore, type SaveData,
+  emptySave, loadSave, resetSave, parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, writeSave, type KeyValueStore, type SaveData,
 } from '../src/platform/storage.ts';
 
 class MemoryStore implements KeyValueStore {
@@ -84,5 +84,21 @@ describe('進行状況の保存', () => {
 
   it('空の保存データは、そのまま読み戻せる', () => {
     expect(parseSave(serializeSave(emptySave()))).toEqual(emptySave());
+  });
+});
+
+describe('進行状況を消す', () => {
+  it('カード・星・ルール・案内を消し、音の設定だけ残す', () => {
+    const s = new MemoryStore();
+    writeSave(s, { ...emptySave(), unlocked: ['nearest', 'sameDir'], bestStars: { 1: 3 }, muted: true, tutorial: { taps: 5, placed: true } });
+    expect(resetSave(s, true)).toBe(true);
+    const d = loadSave(s)!;
+    expect(d.unlocked).toEqual([]);
+    expect(d.bestStars).toEqual({});
+    expect(d.tutorial).toEqual({ taps: 0, placed: false });
+    expect(d.muted).toBe(true);
+  });
+  it('保存できない環境でも例外を出さない', () => {
+    expect(resetSave(null, false)).toBe(false);
   });
 });

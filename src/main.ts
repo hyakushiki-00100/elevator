@@ -7,12 +7,13 @@ import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './rende
 import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
   editorHit, hitTest, inRect, makeLayout, makeView, MUTE_BUTTON, RETRY_BUTTON, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
+  RESET_BUTTON, RESET_YES,
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   fitRules, nextUnlock, placeCardAt, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
-import { browserStore, loadSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
+import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
 import { isShareDialogOpen, openShareDialog, type Feedback } from './ui/shareDialog.ts';
@@ -46,6 +47,8 @@ const bestStars: number[] = STAGES.map(() => 0);
 const store = browserStore();
 /** 案内(指の手本)の進み具合: 1日目に手でタップした回数・カードを一度でも置いたか */
 let tutorial = { taps: 0, placed: false };
+/** 進行状況を消す前の確かめの窓を出しているか */
+let confirmReset = false;
 const sound = new SoundPlayer();
 /** 検証用: 鳴らした効果音の記録(開発サーバーと撮影用ビルドだけ) */
 const soundLog: Sfx[] = [];
@@ -255,12 +258,43 @@ function importShared(text: string): Feedback {
   return r.status;
 }
 
+/** 進行状況を最初に戻す(手に入れたカード・星・ルール・案内。音の設定は残す) */
+function resetProgress(): void {
+  unlocked = [];
+  STAGES.forEach((st, i) => {
+    bestStars[i] = 0;
+    rulesByStage[i] = fitRules([], st.building.elevators, 0, []);
+  });
+  stageIdx = 0;
+  editRow = 0;
+  held = null;
+  previewCard = null;
+  tutorial = { taps: 0, placed: false };
+  if (saving) resetSave(store, sound.muted);
+  newDay();
+}
+
 function onReadyTap(x: number, y: number): void {
   if (unlocked.length === 0) {
     // カードを持っていない最初の日は、どこをタップしても開始
     sfx('click');
     newDay();
     setMode('playing');
+    return;
+  }
+  if (confirmReset) {
+    // 確かめの窓: ✓で消す、それ以外(×・窓の外)はやめる
+    confirmReset = false;
+    if (inRect(RESET_YES, x, y)) {
+      sfx('click');
+      resetProgress();
+    } else sfx('click');
+    return;
+  }
+  if (inRect(RESET_BUTTON, x, y)) {
+    sfx('click');
+    held = null;
+    confirmReset = true;
     return;
   }
   const share = shareButtonHit(x, y);
@@ -450,6 +484,7 @@ function frame(now: number): void {
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
+    confirmReset: mode === 'ready' && confirmReset,
   });
   if (px > 1) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);

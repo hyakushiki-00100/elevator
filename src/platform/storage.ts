@@ -32,6 +32,7 @@ export function emptySave(): SaveData {
 export interface KeyValueStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -117,4 +118,9 @@ export function writeSave(store: KeyValueStore | null, d: SaveData): boolean {
   } catch {
     return false;
   }
+}
+
+/** 進行状況を消す(音の設定だけは残す)。成功したら true(失敗しても例外は外に出さない) */
+export function resetSave(store: KeyValueStore | null, muted: boolean): boolean {
+  return writeSave(store, { ...emptySave(), muted });
 }

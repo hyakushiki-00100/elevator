@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CARD_ORDER, type CardId } from '../src/sim/rules.ts';
 import { STAGES } from '../src/sim/stages.ts';
 import {
-  EDITOR_PANEL, EDITOR_PLAY, EDITOR_PREVIEW, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
+  EDITOR_PANEL, EDITOR_PLAY, EDITOR_PREVIEW, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES,
   shareButtonHit, slotRect, stageTabHit, stageTabRect,
 } from '../src/render/layout.ts';
 import { fitRules, nextUnlock, placeCard, placeCardAt, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
@@ -94,7 +94,7 @@ describe('編集画面の当たり判定', () => {
     const rects = [
       ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i))),
       ...Array.from({ length: n }, (_, i) => handRect(i)),
-      rowButtonRect(0), rowButtonRect(1), EDITOR_PLAY, EDITOR_PREVIEW, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
+      rowButtonRect(0), rowButtonRect(1), EDITOR_PLAY, EDITOR_PREVIEW, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, RESET_BUTTON,
       // ステージの選択ボタン: 今のステージ数 + 1 つ分の余裕
       ...Array.from({ length: STAGES.length + 1 }, (_, i) => stageTabRect(i)),
     ];
@@ -109,5 +109,16 @@ describe('編集画面の当たり判定', () => {
         expect(overlap, `${JSON.stringify(a)} と ${JSON.stringify(b)}`).toBe(false);
       }
     }
+  });
+});
+
+describe('進行状況を消すボタン', () => {
+  it('確かめの「やめる」「消す」は窓の中にあり、互いに重ならない', () => {
+    for (const r of [RESET_NO, RESET_YES]) {
+      expect(inRect(RESET_PANEL, r.x, r.y)).toBe(true);
+      expect(inRect(RESET_PANEL, r.x + r.w, r.y + r.h)).toBe(true);
+    }
+    expect(RESET_NO.x + RESET_NO.w).toBeLessThan(RESET_YES.x);
+    expect(inRect(RESET_BUTTON, RESET_BUTTON.x + 1, RESET_BUTTON.y + 1)).toBe(true);
   });
 });
