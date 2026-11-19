@@ -7,7 +7,7 @@ import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
   MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect, type Layout, type View,
 } from './layout.ts';
-import { drawCard, drawEmptySlot } from './cards.ts';
+import { CARD_LOOP_MS, drawCard, drawEmptySlot } from './cards.ts';
 import { theme } from './theme.ts';
 import {
   drawNumber, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
@@ -542,7 +542,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     for (let i = 0; i < a.slotCount; i++) {
       const rc = slotRect(r, i, a.slotCount);
       const c = rules[i];
-      if (c) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h);
+      if (c) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { t: (a.now / CARD_LOOP_MS) % 1 });
       else drawEmptySlot(ctx, rc.x, rc.y, rc.w, rc.h);
       // 評価の順番(数字)と、次の枠への矢印
       drawNumber(ctx, String(i + 1), rc.x + rc.w / 2, rc.y - 8, 13, T().textDim);
@@ -576,7 +576,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   const full = placed.length >= a.slotCount;
   a.unlocked.forEach((c, i) => {
     const rc = handRect(i, a.unlocked.length, rows);
-    drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { dim: placed.includes(c) || full });
+    drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { dim: placed.includes(c) || full, t: (a.now / CARD_LOOP_MS) % 1 });
   });
   // 手持ちと枠の間に「上へ置く」矢印
   const hr = handRect(0, a.unlocked.length, rows);
@@ -663,7 +663,7 @@ function drawResult(
       ctx.globalAlpha = t;
       ctx.shadowColor = '#ffd34d';
       ctx.shadowBlur = 24;
-      drawCard(ctx, newCard, x, y, w, h);
+      drawCard(ctx, newCard, x, y, w, h, { t: (sinceMs / CARD_LOOP_MS) % 1 });
       ctx.restore();
       // 「+」の印
       fillCircle(ctx, x + w, y, 12, '#3fbf6a');
