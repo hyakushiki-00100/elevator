@@ -20,6 +20,7 @@ const sample: SaveData = {
   rules: { 1: [['sameDir', 'nearest']], 2: [['nearest'], ['express', 'nearest']] },
   lastStage: 2,
   muted: true,
+  tutorial: { taps: 3, placed: true },
 };
 
 describe('進行状況の保存', () => {
@@ -76,6 +77,8 @@ describe('進行状況の保存', () => {
   it('消音の設定がない古い保存データは「音あり」として読む(版は上げない)', () => {
     const old = JSON.stringify({ version: SAVE_VERSION, unlocked: ['nearest'], bestStars: {}, rules: {}, lastStage: 1 });
     expect(parseSave(old)!.muted).toBe(false);
+    expect(parseSave(old)!.tutorial).toEqual({ taps: 0, placed: false });
+    expect(parseSave(JSON.stringify({ ...sample, tutorial: { taps: -1, placed: 'x' } }))!.tutorial).toEqual({ taps: 0, placed: false });
     expect(parseSave(JSON.stringify({ ...sample, muted: 'yes' }))!.muted).toBe(false);
   });
 

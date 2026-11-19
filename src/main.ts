@@ -10,7 +10,7 @@ import {
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
-  fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, type RuleSet,
+  fitRules, nextUnlock, placeCardAt, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
 import { browserStore, loadSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
@@ -44,6 +44,8 @@ const rulesByStage: RuleSet[] = STAGES.map((s) => fitRules([], s.building.elevat
 const bestStars: number[] = STAGES.map(() => 0);
 
 const store = browserStore();
+/** 案内(指の手本)の進み具合: 1日目に手でタップした回数・カードを一度でも置いたか */
+let tutorial = { taps: 0, placed: false };
 const sound = new SoundPlayer();
 /** 検証用: 鳴らした効果音の記録(開発サーバーと撮影用ビルドだけ) */
 const soundLog: Sfx[] = [];
@@ -67,6 +69,7 @@ let saving = true;
     const last = STAGES.findIndex((s) => s.id === saved.lastStage);
     if (last >= 0 && last < stagesOpen(unlocked, STAGES)) stageIdx = last;
     sound.muted = saved.muted;
+    tutorial = { ...saved.tutorial };
   }
 }
 
@@ -90,6 +93,7 @@ function persist(lastIdx: number = stageIdx): void {
   if (!saving) return;
   const data: SaveData = {
     version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id, muted: sound.muted,
+    tutorial: { ...tutorial },
   };
   STAGES.forEach((s, i) => {
     data.bestStars[s.id] = bestStars[i] ?? 0;
@@ -116,6 +120,10 @@ function currentRules(): RuleSet {
 }
 
 let editRow = 0;
+/** 編集画面: 持ち上げているカード(手持ちの何番目か。枠から持ち上げたときは handIndex = null) */
+let held: { card: CardId; handIndex: number | null } | null = null;
+/** 編集画面: 大きく再生するカード */
+let previewCard: CardId | null = null;
 let newCards: CardId[] = [];
 /** 次の日に遊ぶステージ(1日の終わりに決めて保存する。結果画面の「やり直し」で移る) */
 let nextStageIdx = 0;
@@ -268,6 +276,7 @@ function onReadyTap(x: number, y: number): void {
   const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
   if (tab !== null) {
     sfx('click');
+    held = null;
     stageIdx = tab;
     newDay();
     persist();
@@ -276,22 +285,64 @@ function onReadyTap(x: number, y: number): void {
   const slots = slotCountFor(unlocked);
   const rules = currentRules();
   const hit = editorHit(x, y, rules.length, slots, unlocked.length);
-  if (!hit) return;
+  if (!hit) {
+    // 何もない所をタップ: 持ち上げをやめる(枠から持ち上げたカードは、そのまま外れる)
+    if (held) { held = null; sfx('click'); }
+    return;
+  }
   sfx('click');
   if (hit.kind === 'play') {
+    held = null;
     newDay();
     setMode('playing');
     return;
   }
-  if (hit.kind === 'row') editRow = hit.row;
-  else if (hit.kind === 'slot') {
+  if (hit.kind === 'row') {
     editRow = hit.row;
+    return;
+  }
+  if (hit.kind === 'hand') {
+    // 手持ちのカードをタップ: 持ち上げる(もう一度タップでやめる)。大きく再生する
+    const c = unlocked[hit.index]!;
+    if (held && held.handIndex === hit.index) held = null;
+    else held = { card: c, handIndex: hit.index };
+    previewCard = c;
+    return;
+  }
+  // 枠をタップ
+  editRow = hit.row;
+  const inSlot = rules[hit.row]?.[hit.index];
+  if (held) {
+    // 持ち上げているカードを、この枠に置く
+    const next = placeCardAt(rules, hit.row, held.card, hit.index, slots);
+    if (next !== rules) {
+      rulesByStage[stageIdx] = next;
+      tutorial.placed = true;
+      persist();
+    } else {
+      sfx('error');
+    }
+    previewCard = held.card;
+    held = null;
+    return;
+  }
+  if (inSlot) {
+    // 置いてあるカードを持ち上げる(別の枠をタップで移す・何もない所をタップで外す)
     rulesByStage[stageIdx] = removeCard(rules, hit.row, hit.index);
-    persist();
-  } else {
-    rulesByStage[stageIdx] = placeCard(rules, editRow, unlocked[hit.index]!, slots);
+    held = { card: inSlot, handIndex: null };
+    previewCard = inSlot;
     persist();
   }
+}
+
+/** 初回の手本(指)を出す場所。カードを一度でも置いたら出さない */
+function editorHint(): { kind: 'hand'; index: number } | { kind: 'slot'; row: number; index: number } | null {
+  if (tutorial.placed || unlocked.length === 0) return null;
+  const rules = currentRules();
+  const row = rules[editRow] ?? [];
+  if (held) return { kind: 'slot', row: editRow, index: Math.min(row.length, slotCountFor(unlocked) - 1) };
+  const idx = unlocked.findIndex((c) => !row.includes(c));
+  return { kind: 'hand', index: idx >= 0 ? idx : 0 };
 }
 
 canvas.addEventListener('pointerdown', (ev) => {
@@ -322,6 +373,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const hit = hitTest(layout, p.x, p.y, state.elevators.map((e) => e.pos));
   const r = handleTap(hit, control, state.elevators.length);
   control = r.state;
+  if (r.command && unlocked.length === 0) tutorial.taps++;
   if (r.command || hit?.kind === 'elevator') {
     // タップが届いたことを、音と波紋で返す
     sfx('tap');
@@ -394,7 +446,10 @@ function frame(now: number): void {
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
     stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted,
+    held, previewCard: held?.card ?? previewCard, editorHint: mode === 'ready' ? editorHint() : null,
+    stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
     result: mode === 'result' ? dayResult : null,
+    playHint: unlocked.length === 0 && tutorial.taps < 3,
   });
   if (px > 1) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);

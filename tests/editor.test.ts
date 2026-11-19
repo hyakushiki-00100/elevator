@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { CARD_ORDER } from '../src/sim/rules.ts';
+import { CARD_ORDER, type CardId } from '../src/sim/rules.ts';
 import { STAGES } from '../src/sim/stages.ts';
 import {
-  EDITOR_PANEL, EDITOR_PLAY, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, shareButtonHit,
-  slotRect, stageTabHit, stageTabRect,
+  EDITOR_PANEL, EDITOR_PLAY, EDITOR_PREVIEW, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
+  shareButtonHit, slotRect, stageTabHit, stageTabRect,
 } from '../src/render/layout.ts';
-import { fitRules, nextUnlock, placeCard, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
+import { fitRules, nextUnlock, placeCard, placeCardAt, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
 
 describe('カードの編集(純粋な関数)', () => {
+  it('持ち上げたカードを置く: 指定の枠に差し込む。同じ行にあれば移す。枠が埋まっていれば新しいカードは置かない', () => {
+    expect(placeCardAt([[]], 0, 'nearest', 3, 5)).toEqual([['nearest']]); // 空なら末尾(先頭)へ
+    expect(placeCardAt([['nearest']], 0, 'sameDir', 0, 5)).toEqual([['sameDir', 'nearest']]); // 前に差し込む
+    expect(placeCardAt([['nearest', 'sameDir']], 0, 'sameDir', 0, 5)).toEqual([['sameDir', 'nearest']]); // 並べ替え
+    expect(placeCardAt([['nearest', 'sameDir', 'express']], 0, 'nearest', 9, 5)).toEqual([['sameDir', 'express', 'nearest']]);
+    const full: CardId[][] = [['nearest', 'sameDir']];
+    expect(placeCardAt(full, 0, 'express', 0, 2)).toBe(full); // 埋まっている
+    expect(placeCardAt(full, 0, 'sameDir', 0, 2)).toEqual([['sameDir', 'nearest']]); // 移すだけなら置ける
+    expect(placeCardAt(full, 3, 'express', 0, 5)).toBe(full); // 存在しない行
+    const two: CardId[][] = [['nearest'], ['sameDir']];
+    expect(placeCardAt(two, 1, 'nearest', 0, 5)).toEqual([['nearest'], ['nearest', 'sameDir']]); // 行ごとに別
+  });
+
   it('置く: 末尾に追加。同じカードは1基に1枚まで、枠が埋まれば置けない', () => {
     let r = placeCard([[]], 0, 'nearest', 2);
     expect(r).toEqual([['nearest']]);
@@ -61,13 +74,14 @@ describe('カードの編集(純粋な関数)', () => {
 });
 
 describe('編集画面の当たり判定', () => {
-  it('枠・手持ち・開始ボタンの中心をタップすると、それぞれに当たる', () => {
+  it('枠・手持ち・行の頭・開始ボタン・共有・ステージの中心をタップすると、それぞれに当たる', () => {
     const c = (r: { x: number; y: number; w: number; h: number }) => [r.x + r.w / 2, r.y + r.h / 2] as const;
-    expect(editorHit(...c(slotRect(0, 1, 3)), 1, 3, 3)).toEqual({ kind: 'slot', row: 0, index: 1 });
-    expect(editorHit(...c(handRect(2, 3, 1)), 1, 3, 3)).toEqual({ kind: 'hand', index: 2 });
+    expect(editorHit(...c(slotRect(0, 1)), 1, 3, 3)).toEqual({ kind: 'slot', row: 0, index: 1 });
+    expect(editorHit(...c(slotRect(0, 4)), 1, 3, 3)).toBeNull(); // 枠の数(3)より後ろは枠ではない
+    expect(editorHit(...c(handRect(2)), 1, 3, 3)).toEqual({ kind: 'hand', index: 2 });
     expect(editorHit(...c(EDITOR_PLAY), 1, 3, 3)).toEqual({ kind: 'play' });
-    expect(editorHit(...c(rowButtonRect(1, 3)), 2, 3, 3)).toEqual({ kind: 'row', row: 1 });
-    expect(editorHit(5, 5, 1, 3, 3)).toBeNull();
+    expect(editorHit(...c(rowButtonRect(1)), 2, 3, 3)).toEqual({ kind: 'row', row: 1 });
+    expect(editorHit(...c(EDITOR_PREVIEW), 2, 3, 3)).toBeNull(); // 再生の窓は押しても何もしない
     expect(stageTabHit(...c(stageTabRect(1)), 2)).toBe(1);
     expect(shareButtonHit(...c(SHARE_EXPORT_BUTTON))).toBe('export');
     expect(shareButtonHit(...c(SHARE_IMPORT_BUTTON))).toBe('import');
@@ -78,9 +92,9 @@ describe('編集画面の当たり判定', () => {
   it('5枠・2基・全カードを持っていても、すべての要素が編集画面の枠内に収まり、重ならない', () => {
     const n = CARD_ORDER.length;
     const rects = [
-      ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i, 5))),
-      ...Array.from({ length: n }, (_, i) => handRect(i, n, 2)),
-      rowButtonRect(0, 5), rowButtonRect(1, 5), EDITOR_PLAY, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
+      ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i))),
+      ...Array.from({ length: n }, (_, i) => handRect(i)),
+      rowButtonRect(0), rowButtonRect(1), EDITOR_PLAY, EDITOR_PREVIEW, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON,
       // ステージの選択ボタン: 今のステージ数 + 1 つ分の余裕
       ...Array.from({ length: STAGES.length + 1 }, (_, i) => stageTabRect(i)),
     ];

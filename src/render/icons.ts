@@ -310,3 +310,72 @@ function drawSegments(
   }
   ctx.restore();
 }
+
+/** 指(手本・案内用)。指先が (x, y)。pressed なら少し押し込んだ形 */
+export function drawPointer(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, pressed: boolean): void {
+  const s = size / 40;
+  const dy = pressed ? 3 * s : 0;
+  ctx.save();
+  ctx.translate(x, y + dy);
+  ctx.rotate(-0.35);
+  ctx.fillStyle = '#f5d0b0';
+  ctx.strokeStyle = '#3a2a20';
+  ctx.lineWidth = 2;
+  // 人差し指
+  roundRect(ctx, -5 * s, 0, 10 * s, 26 * s, 5 * s);
+  ctx.fill(); ctx.stroke();
+  // 手のひら
+  roundRect(ctx, -9 * s, 18 * s, 22 * s, 20 * s, 7 * s);
+  ctx.fill(); ctx.stroke();
+  // 指の付け根の線(握っている指)
+  ctx.beginPath();
+  ctx.moveTo(-1 * s, 24 * s); ctx.lineTo(-1 * s, 30 * s);
+  ctx.moveTo(5 * s, 24 * s); ctx.lineTo(5 * s, 30 * s);
+  ctx.stroke();
+  ctx.restore();
+  if (pressed) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 10 * s, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+/** エレベーターのかごの絵(編集画面の行の頭など)。色はそのエレベーターの色 */
+export function drawCarIcon(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string): void {
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y, w, h, Math.min(8, w * 0.15));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(ctx, x + w * 0.12, y + h * 0.2, w * 0.76, h * 0.7, 3);
+  ctx.fill();
+  // 扉の合わせ目と、上の表示窓
+  ctx.fillStyle = color;
+  ctx.fillRect(x + w / 2 - 1, y + h * 0.2, 2, h * 0.7);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, x + w * 0.3, y + h * 0.05, w * 0.4, h * 0.1, 2);
+  ctx.fill();
+}
+
+/** ステージの絵: 階の数とエレベーターの本数を描いた小さなビル(数字は使わない) */
+export function drawBuildingIcon(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, floors: number, elevators: number,
+  colors: readonly string[], fg: string,
+): void {
+  const fh = h / floors;
+  ctx.strokeStyle = fg;
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(x, y, w, h);
+  for (let f = 1; f < floors; f++) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + f * fh); ctx.lineTo(x + w, y + f * fh);
+    ctx.stroke();
+  }
+  const sw = Math.min(6, w / (elevators * 2 + 1));
+  for (let i = 0; i < elevators; i++) {
+    const sx = x + w - (elevators - i) * (sw + 3) - 1;
+    ctx.fillStyle = colors[i % colors.length]!;
+    ctx.fillRect(sx, y + 1, sw, h - 2);
+  }
+}

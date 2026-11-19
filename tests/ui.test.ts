@@ -1,7 +1,8 @@
+import { STORY_LOOP_MS, storyAt } from '../src/render/story.ts';
 import { describe, expect, it } from 'vitest';
 import { makeBuilding } from '../src/sim/building.ts';
 import {
-  BUILDING_RIGHT, LOGICAL_H, LOGICAL_W, PANEL_X, RESULT_PANEL, RETRY_BUTTON, START_BUTTON,
+  BUILDING_RIGHT, LOGICAL_H, LOGICAL_W, PANEL_X, RESULT_PANEL, RETRY_BUTTON, START_BUTTON, START_DEMO,
   carHeight, carTop, floorTop, hitTest, inRect, makeLayout, makeView, toLogical,
 } from '../src/render/layout.ts';
 import { handleTap } from '../src/ui/controls.ts';
@@ -101,3 +102,29 @@ describe('handleTap', () => {
     expect(r.state).toBe(s);
   });
 });
+
+describe('最初の画面の見本', () => {
+  it('見本と開始ボタンは重ならず、画面内にある', () => {
+    expect(START_DEMO.x + START_DEMO.w).toBeLessThan(START_BUTTON.x);
+    expect(START_DEMO.y).toBeGreaterThanOrEqual(0);
+    expect(START_DEMO.y + START_DEMO.h).toBeLessThanOrEqual(LOGICAL_H);
+  });
+
+  it('順番: タップ → かごが3階へ → 乗る → 1階へ → 降りる → チェック', () => {
+    const at = (t: number) => storyAt(t);
+    // タップより前は、かごは1階にいる
+    let firstTap = -1;
+    for (let i = 0; i < 1000; i++) if (at(i / 1000).tap) { firstTap = i / 1000; break; }
+    expect(firstTap).toBeGreaterThan(0);
+    for (let i = 0; i <= firstTap * 1000; i++) expect(at(i / 1000).carFloor).toBe(0);
+    // 乗り込み始めるとき、かごは3階(添字2)に着いている
+    for (let i = 0; i < 1000; i++) {
+      const s = at(i / 1000);
+      if (s.person === 'wait' && s.personX > 0) expect(s.carFloor).toBe(2);
+      if (s.person === 'leave') expect(s.carFloor).toBe(0);
+      if (s.check > 0) expect(s.person === 'leave' || s.person === 'gone').toBe(true);
+    }
+    expect(STORY_LOOP_MS).toBeGreaterThan(3000);
+  });
+});
+

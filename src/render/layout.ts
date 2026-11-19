@@ -78,7 +78,9 @@ export function hitTest(l: Layout, x: number, y: number, carPos: readonly number
 export const RESULT_PANEL: Rect = { x: 250, y: 70, w: 460, h: 400 };
 export const RETRY_BUTTON: Rect = { x: 480 - 44, y: 470 - 24 - 88, w: 88, h: 88 };
 /** 開始画面のボタン */
-export const START_BUTTON: Rect = { x: 480 - 60, y: 270 - 60, w: 120, h: 120 };
+/** 最初の画面: 右に開始ボタン、左に遊び方の見本(動く絵) */
+export const START_BUTTON: Rect = { x: 640, y: 210, w: 120, h: 120 };
+export const START_DEMO: Rect = { x: 150, y: 100, w: 400, h: 340 };
 
 export function inRect(r: Rect, x: number, y: number): boolean {
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -104,34 +106,39 @@ export function toLogical(v: View, px: number, py: number): { x: number; y: numb
   return { x: (px - v.offsetX) / v.scale, y: (py - v.offsetY) / v.scale };
 }
 
-// ---- ルールのカードの編集画面(1日の開始前) ----
-export const EDITOR_PANEL: Rect = { x: 230, y: 40, w: 500, h: 460 };
-export const CARD_W = 64;
-export const CARD_H = 84;
-const CARD_GAP = 16;
-const SLOTS_Y = 84;
-const ROW_H = 104;
-const HAND_GAP = 34;
-/** 開始ボタン(右下。左下はステージの選択ボタン) */
-export const EDITOR_PLAY: Rect = { x: 230 + 500 - 16 - 76, y: 418, w: 76, h: 76 };
+// ---- ルールのカードの編集画面(1日の開始前、2026-11-19 作り直し) ----
+// 左上: エレベーターごとの行(行の頭に、そのエレベーターの色のかごと番号) / 左下: 手持ちのカード
+// 右: 選んだカードの場面を大きく再生する窓 / 最下段: ステージの選択・共有・開始
+export const EDITOR_PANEL: Rect = { x: 16, y: 16, w: 928, h: 508 };
+export const CARD_W = 72;
+export const CARD_H = 96;
+const CARD_GAP = 18;
+const SLOT_X0 = 116;
+const ROW_Y0 = 52;
+const ROW_H = 124;
+const HAND_Y = ROW_Y0 + 2 * ROW_H + 24;
+/** 選んだカードの場面を大きく再生する窓 */
+export const EDITOR_PREVIEW: Rect = { x: 580, y: 36, w: 344, h: 388 };
+/** 開始ボタン(右下) */
+export const EDITOR_PLAY: Rect = { x: 840, y: 434, w: 84, h: 84 };
 
-function rowStartX(n: number): number {
-  return 480 - (n * CARD_W + (n - 1) * CARD_GAP) / 2;
+function rowY(row: number): number {
+  return ROW_Y0 + row * ROW_H;
 }
 
 /** エレベーター row の i 番目の枠 */
-export function slotRect(row: number, i: number, slotCount: number): Rect {
-  return { x: rowStartX(slotCount) + i * (CARD_W + CARD_GAP), y: SLOTS_Y + row * ROW_H, w: CARD_W, h: CARD_H };
+export function slotRect(row: number, i: number): Rect {
+  return { x: SLOT_X0 + i * (CARD_W + CARD_GAP), y: rowY(row), w: CARD_W, h: CARD_H };
 }
 
-/** 手持ちのカードの i 番目(枠の行の下に並べる) */
-export function handRect(i: number, handCount: number, rows: number): Rect {
-  return { x: rowStartX(handCount) + i * (CARD_W + CARD_GAP), y: SLOTS_Y + rows * ROW_H + HAND_GAP, w: CARD_W, h: CARD_H };
+/** 手持ちのカードの i 番目 */
+export function handRect(i: number): Rect {
+  return { x: SLOT_X0 + i * (CARD_W + CARD_GAP), y: HAND_Y, w: CARD_W, h: CARD_H };
 }
 
-/** 2基以上のとき、行の左に置くエレベーターの選択ボタン */
-export function rowButtonRect(row: number, slotCount: number): Rect {
-  return { x: rowStartX(slotCount) - 56, y: SLOTS_Y + row * ROW_H + 18, w: 40, h: 48 };
+/** 行の頭(そのエレベーターのかごの絵)。タップでその行を選ぶ */
+export function rowButtonRect(row: number): Rect {
+  return { x: 36, y: rowY(row) + 8, w: 64, h: 80 };
 }
 
 export type EditorHit =
@@ -144,16 +151,16 @@ export type EditorHit =
 export function editorHit(x: number, y: number, rows: number, slotCount: number, handCount: number): EditorHit {
   if (inRect(EDITOR_PLAY, x, y)) return { kind: 'play' };
   for (let r = 0; r < rows; r++) {
-    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i, slotCount), x, y)) return { kind: 'slot', row: r, index: i };
-    if (rows > 1 && inRect(rowButtonRect(r, slotCount), x, y)) return { kind: 'row', row: r };
+    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i), x, y)) return { kind: 'slot', row: r, index: i };
+    if (inRect(rowButtonRect(r), x, y)) return { kind: 'row', row: r };
   }
-  for (let i = 0; i < handCount; i++) if (inRect(handRect(i, handCount, rows), x, y)) return { kind: 'hand', index: i };
+  for (let i = 0; i < handCount; i++) if (inRect(handRect(i), x, y)) return { kind: 'hand', index: i };
   return null;
 }
 
-/** ステージの選択ボタン(編集画面の左下) */
+/** ステージの選択ボタン(最下段の左) */
 export function stageTabRect(i: number): Rect {
-  return { x: EDITOR_PANEL.x + 16 + i * 52, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 44, h: 40 };
+  return { x: 36 + i * 58, y: 452, w: 50, h: 52 };
 }
 
 export function stageTabHit(x: number, y: number, stages: number): number | null {
@@ -162,9 +169,9 @@ export function stageTabHit(x: number, y: number, stages: number): number | null
   return null;
 }
 
-/** ルールの共有ボタン(編集画面の下段、ステージの選択ボタンと開始ボタンの間) */
-export const SHARE_EXPORT_BUTTON: Rect = { x: 540, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 40, h: 40 };
-export const SHARE_IMPORT_BUTTON: Rect = { x: 588, y: EDITOR_PANEL.y + EDITOR_PANEL.h - 16 - 40, w: 40, h: 40 };
+/** ルールの共有ボタン(最下段の中ほど) */
+export const SHARE_EXPORT_BUTTON: Rect = { x: 560, y: 454, w: 48, h: 48 };
+export const SHARE_IMPORT_BUTTON: Rect = { x: 620, y: 454, w: 48, h: 48 };
 
 export function shareButtonHit(x: number, y: number): 'export' | 'import' | null {
   if (inRect(SHARE_EXPORT_BUTTON, x, y)) return 'export';

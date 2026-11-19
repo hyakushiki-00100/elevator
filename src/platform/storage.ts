@@ -20,10 +20,12 @@ export interface SaveData {
   lastStage: number;
   /** 音を消しているか(後から足した項目。古い保存データにはないので、ないときは false) */
   muted: boolean;
+  /** 案内(指の手本)の進み具合(後から足した項目。ないときは最初から) */
+  tutorial: { taps: number; placed: boolean };
 }
 
 export function emptySave(): SaveData {
-  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false };
+  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false, tutorial: { taps: 0, placed: false } };
 }
 
 /** localStorage と同じ形の最小限の窓口(テストでは偽物を渡す) */
@@ -72,6 +74,12 @@ export function parseSave(text: string | null): SaveData | null {
   const ls = raw['lastStage'];
   if (typeof ls === 'number' && Number.isInteger(ls) && ls >= 1 && ls <= 999) out.lastStage = ls;
   out.muted = raw['muted'] === true;
+  const tu = raw['tutorial'];
+  if (isObj(tu)) {
+    const taps = tu['taps'];
+    if (typeof taps === 'number' && Number.isInteger(taps) && taps >= 0) out.tutorial.taps = Math.min(taps, 999);
+    out.tutorial.placed = tu['placed'] === true;
+  }
   return out;
 }
 

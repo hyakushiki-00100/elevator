@@ -11,6 +11,22 @@ export function placeCard(rules: RuleSet, row: number, card: CardId, slotCount: 
   return rules.map((r, i) => (i === row ? [...r, card] : r));
 }
 
+/**
+ * 持ち上げたカードを、そのエレベーターの index 番目の枠に置く(2026-11-19、2段階の置き方)。
+ * - 同じカードがすでにその行にあれば、そこから抜いて置き直す(並べ替え)
+ * - index が今の枚数より後ろなら、末尾に置く
+ * - 枠が埋まっていて、新しいカードを足すことになる場合は置かない(元のまま)
+ */
+export function placeCardAt(rules: RuleSet, row: number, card: CardId, index: number, slotCount: number): RuleSet {
+  const cur = rules[row];
+  if (!cur) return rules;
+  const without = cur.filter((c) => c !== card);
+  if (without.length >= slotCount) return rules;
+  const at = Math.max(0, Math.min(index, without.length));
+  const next = [...without.slice(0, at), card, ...without.slice(at)];
+  return rules.map((r, i) => (i === row ? next : r));
+}
+
 /** 枠のカードを外す(下のカードは1つずつ上に詰める) */
 export function removeCard(rules: RuleSet, row: number, index: number): RuleSet {
   const cur = rules[row];
