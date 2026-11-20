@@ -39,7 +39,8 @@ export interface Passenger {
 }
 
 /** 見本: 左端のドアから行列まで歩く長さ(tick)。案A(見た目だけ)と案B(sim も待つ)で同じ値を使う */
-export const SAMPLE_WALK_TICKS = 36;
+// 1.2秒(36)は「急かされている感じが強い」(2026-11-20 ユーザーの感想)ため 2.5秒に延ばした
+export const SAMPLE_WALK_TICKS = 75;
 
 export interface Stats {
   spawned: number;

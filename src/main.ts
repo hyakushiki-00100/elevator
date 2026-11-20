@@ -177,7 +177,11 @@ function newDay(): void {
   const st = stage();
   rulesByStage[stageIdx] = currentLayout();
   // ステージごとに固定のシード(同じルール・同じ操作なら同じ結果になる)
-  state = createSim({ building: st.building, traffic: st.traffic, rules: currentRules(), walkTicks: WALK === 'b' ? SAMPLE_WALK_TICKS : 0 }, st.seed);
+  // 見本では、急ぎ・団体・荷物持ちも出す(どのステージも出現率がまだ0で、絵を確かめられないため)
+  const traffic = WALK
+    ? { ...st.traffic, phases: st.traffic.phases.map((p) => ({ ...p, rushedShare: 0.1, groupShare: 0.08, luggageShare: 0.08 })) }
+    : st.traffic;
+  state = createSim({ building: st.building, traffic, rules: currentRules(), walkTicks: WALK === 'b' ? SAMPLE_WALK_TICKS : 0 }, st.seed);
   layout = makeLayout(st.building);
   control = { selected: st.building.elevators === 1 ? 0 : null };
   pending = [];

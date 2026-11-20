@@ -347,7 +347,7 @@ function drawPerson(
 ): void {
   const r = Math.max(4, Math.min(maxR, unit * 0.38));
   const color = floorColor(p.dest);
-  const bob = walkNow !== null ? Math.abs(Math.sin(walkNow / 90)) * 2 : 0;
+  const bob = walkNow !== null ? Math.abs(Math.sin(walkNow / 150)) * 2 : 0;
   const shake = remain < 0.25 && walkNow === null ? Math.sin(remain * 400) * 1.5 : 0;
   const one = (x: number, scale: number, lean: number): void => {
     const hr = r * 0.55 * scale;
