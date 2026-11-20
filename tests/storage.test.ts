@@ -102,3 +102,10 @@ describe('進行状況を消す', () => {
     expect(resetSave(null, false)).toBe(false);
   });
 });
+
+describe('空いた枠の保存', () => {
+  it('null(空いた枠)は残し、知らない値だけ捨てる', () => {
+    const d = parseSave(JSON.stringify({ ...emptySave(), rules: { 1: [[null, 'nearest', 'bogus', null, 'sameDir']] } }))!;
+    expect(d.rules[1]).toEqual([[null, 'nearest', null, 'sameDir']]);
+  });
+});

@@ -11,9 +11,9 @@ import {
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
-  fitRules, nextUnlock, placeCardAt, removeCard, slotCountFor, stagesOpen, type RuleSet,
+  compactLayout, dropFromHand, fitLayout, moveSlot, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
 } from './ui/editor.ts';
-import { advancePreview, ensurePreview, type Preview } from './ui/preview.ts';
+import { advancePreview, ensurePreview, previewRuleSets, type Preview } from './ui/preview.ts';
 import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
@@ -41,7 +41,8 @@ let unlocked: CardId[] = [];
 /** 選択中のステージ(STAGES の添字) */
 let stageIdx = 0;
 /** ステージごとのルール(エレベーターごとの枠) */
-const rulesByStage: RuleSet[] = STAGES.map((s) => fitRules([], s.building.elevators, 0, []));
+/** ステージごとの枠の並び(空いた枠は null。枠の位置は固定) */
+const rulesByStage: SlotLayout[] = STAGES.map((s) => fitLayout([], s.building.elevators, 0, []));
 /** ステージごとの最高の星 */
 const bestStars: number[] = STAGES.map(() => 0);
 
@@ -119,13 +120,30 @@ function stage(): Stage {
   };
 }
 
+/** 今のステージの枠の並び(空いた枠を含む。編集画面の表示用) */
+function currentLayout(): SlotLayout {
+  return fitLayout(rulesByStage[stageIdx] ?? [], stage().building.elevators, slotCountFor(unlocked), unlocked);
+}
+
+/** 今のステージのルール(空いた枠を飛ばして左から詰めた並び。sim・共有・採点に渡す形) */
 function currentRules(): RuleSet {
-  return fitRules(rulesByStage[stageIdx] ?? [], stage().building.elevators, slotCountFor(unlocked), unlocked);
+  return compactLayout(currentLayout());
 }
 
 let editRow = 0;
-/** 編集画面: 持ち上げているカード(手持ちの何番目か。枠から持ち上げたときは handIndex = null) */
-let held: { card: CardId; handIndex: number | null } | null = null;
+/**
+ * 編集画面: 引っ張っているカード。from は手持ち(index)か枠(row, slot)。
+ * moved は、触れた場所から少し動いたか(動かずに離したら「触れただけ」として説明を見せるだけにする)
+ */
+interface Drag {
+  card: CardId;
+  from: { kind: 'hand'; index: number } | { kind: 'slot'; row: number; slot: number };
+  x0: number; y0: number; x: number; y: number;
+  moved: boolean;
+}
+let drag: Drag | null = null;
+/** これだけ動いたら「引っ張り」と見なす(論理座標。スマホで触れただけのずれを引っ張りと誤解しないため) */
+const DRAG_THRESHOLD = 10;
 /** 編集画面: 大きく再生するカード */
 let previewCard: CardId | null = null;
 /** 編集画面の「試しに動かす」窓(本物のビルを今のルールで動かす。得点・保存には関係しない) */
@@ -148,9 +166,9 @@ let modeSince = performance.now();
 
 function newDay(): void {
   const st = stage();
-  rulesByStage[stageIdx] = currentRules();
+  rulesByStage[stageIdx] = currentLayout();
   // ステージごとに固定のシード(同じルール・同じ操作なら同じ結果になる)
-  state = createSim({ building: st.building, traffic: st.traffic, rules: rulesByStage[stageIdx] }, st.seed);
+  state = createSim({ building: st.building, traffic: st.traffic, rules: currentRules() }, st.seed);
   layout = makeLayout(st.building);
   control = { selected: st.building.elevators === 1 ? 0 : null };
   pending = [];
@@ -190,7 +208,7 @@ function setMode(m: Mode): void {
 function officialResult(): DayResult {
   const st = stage();
   const day = computeScore(state.stats, st.stars);
-  const rules = rulesByStage[stageIdx] ?? [];
+  const rules = currentRules();
   const hasCards = rules.some((r) => r.length > 0);
   if (!hasCards || state.manualUsed) {
     return { score: day.score, stars: day.stars, basis: 'manual', days: 1, dayScore: day.score };
@@ -219,27 +237,17 @@ function finishDay(): void {
 
 /**
  * 1日の終わりに、次の日の準備をしておく(結果画面のままページを閉じても、保存に反映されるように)。
- * - 新しいステージが開いたら、次の日はそこへ移る。最初は、いま遊んでいたステージの1基目の並びを全基に置いておく
- * - 初めてカードを手に入れたら、最初の枠に置いておく(置き方を図で示す代わり)
+ * 新しいステージが開いたら、次の日はそこへ移る。
+ * カードは自動で枠に置かない(2026-11-20 ユーザー決定。置き方は編集画面の指の手本で示す)。
  */
 function prepareProgress(openedStage: number | null): void {
-  nextStageIdx = stageIdx;
-  if (openedStage !== null) {
-    const prev = rulesByStage[stageIdx]?.[0] ?? [];
-    nextStageIdx = openedStage;
-    rulesByStage[nextStageIdx] = Array.from({ length: STAGES[nextStageIdx]!.building.elevators }, () => [...prev]);
-  }
-  const target = rulesByStage[nextStageIdx] ?? [];
-  if (newCards.length > 0 && target.every((r) => r.length === 0)) {
-    const n = STAGES[nextStageIdx]!.building.elevators;
-    rulesByStage[nextStageIdx] = Array.from({ length: n }, () => [newCards[0]!]);
-  }
+  nextStageIdx = openedStage ?? stageIdx;
 }
 
 /** 結果画面の「やり直し」: 準備しておいた次の日へ */
 function prepareNextDay(): void {
   stageIdx = nextStageIdx;
-  rulesByStage[stageIdx] = currentRules();
+  rulesByStage[stageIdx] = currentLayout();
   newCards = [];
   newDay();
 }
@@ -267,11 +275,11 @@ function resetProgress(): void {
   unlocked = [];
   STAGES.forEach((st, i) => {
     bestStars[i] = 0;
-    rulesByStage[i] = fitRules([], st.building.elevators, 0, []);
+    rulesByStage[i] = fitLayout([], st.building.elevators, 0, []);
   });
   stageIdx = 0;
   editRow = 0;
-  held = null;
+  drag = null;
   previewCard = null;
   tutorial = { taps: 0, placed: false };
   if (saving) resetSave(store, sound.muted);
@@ -297,7 +305,7 @@ function onReadyTap(x: number, y: number): void {
   }
   if (inRect(RESET_BUTTON, x, y)) {
     sfx('click');
-    held = null;
+    drag = null;
     confirmReset = true;
     return;
   }
@@ -314,73 +322,94 @@ function onReadyTap(x: number, y: number): void {
   const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
   if (tab !== null) {
     sfx('click');
-    held = null;
+    drag = null;
     stageIdx = tab;
     newDay();
     persist();
     return;
   }
   const slots = slotCountFor(unlocked);
-  const rules = currentRules();
-  const hit = editorHit(x, y, rules.length, slots, unlocked.length);
-  if (!hit) {
-    // 何もない所をタップ: 持ち上げをやめる(枠から持ち上げたカードは、そのまま外れる)
-    if (held) { held = null; sfx('click'); }
-    return;
-  }
-  sfx('click');
+  const lay = currentLayout();
+  const hit = editorHit(x, y, lay.length, slots, unlocked.length);
+  if (!hit) return;
   if (hit.kind === 'play') {
-    held = null;
+    sfx('click');
     newDay();
     setMode('playing');
     return;
   }
   if (hit.kind === 'row') {
+    sfx('click');
     editRow = hit.row;
     return;
   }
+  // カードに触れた: 引っ張り始める(動かさずに離したら、説明を見せるだけ)
   if (hit.kind === 'hand') {
-    // 手持ちのカードをタップ: 持ち上げる(もう一度タップでやめる)。大きく再生する
     const c = unlocked[hit.index]!;
-    if (held && held.handIndex === hit.index) held = null;
-    else held = { card: c, handIndex: hit.index };
-    previewCard = c;
+    drag = { card: c, from: { kind: 'hand', index: hit.index }, x0: x, y0: y, x, y, moved: false };
     return;
   }
-  // 枠をタップ
   editRow = hit.row;
-  const inSlot = rules[hit.row]?.[hit.index];
-  if (held) {
-    // 持ち上げているカードを、この枠に置く
-    const next = placeCardAt(rules, hit.row, held.card, hit.index, slots);
-    if (next !== rules) {
-      rulesByStage[stageIdx] = next;
-      tutorial.placed = true;
-      persist();
-    } else {
-      sfx('error');
-    }
-    previewCard = held.card;
-    held = null;
+  const c = lay[hit.row]?.[hit.index] ?? null;
+  if (c) drag = { card: c, from: { kind: 'slot', row: hit.row, slot: hit.index }, x0: x, y0: y, x, y, moved: false };
+}
+
+/** 引っ張っている間: カードを指に付いてこさせる */
+function onReadyMove(x: number, y: number): void {
+  if (!drag) return;
+  drag.x = x;
+  drag.y = y;
+  if (!drag.moved && Math.hypot(x - drag.x0, y - drag.y0) >= DRAG_THRESHOLD) drag.moved = true;
+}
+
+/** 引っ張っているカードを、いま指がある枠に置いたらどうなるか(枠の上でなければ null) */
+function dropTarget(d: Drag): { row: number; slot: number } | null {
+  const lay = currentLayout();
+  const hit = editorHit(d.x, d.y, lay.length, slotCountFor(unlocked), unlocked.length);
+  return hit && hit.kind === 'slot' ? { row: hit.row, slot: hit.index } : null;
+}
+
+function applyDrop(d: Drag, t: { row: number; slot: number }): SlotLayout {
+  const lay = currentLayout();
+  return d.from.kind === 'hand' ? dropFromHand(lay, t.row, t.slot, d.card) : moveSlot(lay, d.from.row, d.from.slot, t.row, t.slot);
+}
+
+/** 指を離した: 枠の上なら置く・入れ替える。枠のカードを枠の外で離したら外す。動かさずに離したら説明を見せるだけ */
+function onReadyUp(): void {
+  const d = drag;
+  drag = null;
+  if (!d) return;
+  if (!d.moved) {
+    sfx('click');
+    previewCard = previewCard === d.card ? null : d.card;
     return;
   }
-  if (inSlot) {
-    // 置いてあるカードを持ち上げる(別の枠をタップで移す・何もない所をタップで外す)
-    rulesByStage[stageIdx] = removeCard(rules, hit.row, hit.index);
-    held = { card: inSlot, handIndex: null };
-    previewCard = inSlot;
+  const t = dropTarget(d);
+  if (t) {
+    rulesByStage[stageIdx] = applyDrop(d, t);
+    editRow = t.row;
+    tutorial.placed = true;
+    previewCard = null;
+    sfx('board');
+    persist();
+    return;
+  }
+  if (d.from.kind === 'slot') {
+    rulesByStage[stageIdx] = removeAt(currentLayout(), d.from.row, d.from.slot);
+    sfx('click');
     persist();
   }
 }
 
-/** 初回の手本(指)を出す場所。カードを一度でも置いたら出さない */
-function editorHint(): { kind: 'hand'; index: number } | { kind: 'slot'; row: number; index: number } | null {
-  if (tutorial.placed || unlocked.length === 0) return null;
-  const rules = currentRules();
-  const row = rules[editRow] ?? [];
-  if (held) return { kind: 'slot', row: editRow, index: Math.min(row.length, slotCountFor(unlocked) - 1) };
-  const idx = unlocked.findIndex((c) => !row.includes(c));
-  return { kind: 'hand', index: idx >= 0 ? idx : 0 };
+/**
+ * 指の手本: 枠が全部空なら、手持ちのカードから枠へ引っ張る動きを見せる
+ * (カードを自動で置かなくなったので、新しいステージでも毎回ここで示す)
+ */
+function editorHint(): { hand: number; row: number; slot: number } | null {
+  if (unlocked.length === 0 || drag) return null;
+  const lay = currentLayout();
+  if (lay.some((r) => r.some((c) => c !== null))) return null;
+  return { hand: 0, row: editRow, slot: 0 };
 }
 
 canvas.addEventListener('pointerdown', (ev) => {
@@ -397,6 +426,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     return;
   }
   if (mode === 'ready') {
+    canvas.setPointerCapture?.(ev.pointerId);
     onReadyTap(p.x, p.y);
     return;
   }
@@ -420,6 +450,25 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (r.command) pending.push(r.command);
 });
 
+function toLogicalEv(ev: PointerEvent): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  return toLogical(view, ev.clientX - rect.left, ev.clientY - rect.top);
+}
+canvas.addEventListener('pointermove', (ev) => {
+  if (mode !== 'ready' || !drag) return;
+  const p = toLogicalEv(ev);
+  onReadyMove(p.x, p.y);
+});
+for (const type of ['pointerup', 'pointercancel'] as const) {
+  canvas.addEventListener(type, (ev) => {
+    if (mode !== 'ready' || !drag) return;
+    if (type === 'pointercancel') { drag = null; return; }
+    const p = toLogicalEv(ev);
+    onReadyMove(p.x, p.y);
+    onReadyUp();
+  });
+}
+
 // iPhone の Safari では、指を離したときの操作でないと音の許可にならないことがあるので、ここでも準備する
 for (const type of ['pointerup', 'touchend', 'click'] as const) {
   window.addEventListener(type, () => sound.unlock(), { capture: true, passive: true });
@@ -436,7 +485,11 @@ function frame(now: number): void {
   if (mode === 'ready' && unlocked.length > 0) {
     const st = stage();
     const cfg = { building: st.building, traffic: st.traffic };
-    simPreview = ensurePreview(simPreview, cfg, st.seed, currentRules(), editRow, held?.card ?? null, slotCountFor(unlocked));
+    const t = drag && drag.moved ? dropTarget(drag) : null;
+    const sets = t && drag
+      ? [currentRules(), compactLayout(applyDrop(drag, t))]
+      : previewRuleSets(currentRules(), editRow, previewCard, slotCountFor(unlocked));
+    simPreview = ensurePreview(simPreview, cfg, st.seed, sets, t ? t.row : editRow, t && drag ? drag.card : previewCard);
     previewAcc += Math.min(now - last, 250);
     while (previewAcc >= DT) {
       advancePreview(simPreview, cfg, st.seed);
@@ -500,9 +553,10 @@ function frame(now: number): void {
     starThresholds: st.stars,
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
     selected: control.selected, effects, mode, modeSince, now,
-    unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
+    unlocked, slotCount: slotCountFor(unlocked), editRules: currentLayout(), editRow, newCards,
     stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
-    held, previewCard: held?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,
+    drag: drag && drag.moved ? { card: drag.card, x: drag.x, y: drag.y, from: drag.from, target: dropTarget(drag) } : null,
+    previewCard: drag?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
@@ -534,7 +588,7 @@ if (DEBUG_HOOKS) {
     fastForward(ticks: number) { for (let i = 0; i < ticks && !state.finished; i++) step(state); },
     /** 検証用: 今のステージのルールを置き換える(1日の開始前に使う) */
     setRules(rules: CardId[][]) {
-      rulesByStage[stageIdx] = fitRules(rules, stage().building.elevators, slotCountFor(unlocked), unlocked);
+      rulesByStage[stageIdx] = fitLayout(rules, stage().building.elevators, slotCountFor(unlocked), unlocked);
       newDay();
     },
     /** 検証用: 編集画面・最初の画面から1日を始める */

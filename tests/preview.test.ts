@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { STAGES } from '../src/sim/stages.ts';
-import { advancePreview, ensurePreview, PREVIEW_SHOW, PREVIEW_WARMUP, previewRuleSets } from '../src/ui/preview.ts';
+import type { CardId } from '../src/sim/rules.ts';
+import { advancePreview, ensurePreview as ensureSets, PREVIEW_SHOW, PREVIEW_WARMUP, previewRuleSets, type Preview } from '../src/ui/preview.ts';
+import type { RuleSet } from '../src/ui/editor.ts';
+
+/** 持ち上げたカードを先頭に足す比べ方で作る(main.ts のタップしたときと同じ) */
+function ensurePreview(prev: Preview | null, c: typeof cfg, seed: number, base: RuleSet, row: number, held: CardId | null, slots: number): Preview {
+  return ensureSets(prev, c, seed, previewRuleSets(base, row, held, slots), row, held);
+}
 
 const st = STAGES[0]!;
 const cfg = { building: st.building, traffic: st.traffic };

@@ -72,3 +72,91 @@ export function stagesOpen(unlocked: readonly CardId[], stages: readonly { opens
 export function slotCountFor(unlocked: readonly CardId[]): number {
   return Math.min(5, unlocked.length);
 }
+
+// ---- 引っ張って置く方式(2026-11-20)。枠の位置を固定し、空きを許す ----
+// 置いた位置から勝手にずれないよう、枠ごとに「カードか空き(null)」を持つ。
+// sim・共有・採点には、空きを飛ばして左から詰めた並び(compactLayout)を渡すので、意味は今までと同じ。
+
+export type SlotRow = (CardId | null)[];
+export type SlotLayout = SlotRow[];
+
+/** 空きを飛ばして左から詰めた並び(sim と共有に渡す形) */
+export function compactLayout(layout: readonly (readonly (CardId | null)[])[]): RuleSet {
+  return layout.map((r) => r.filter((c): c is CardId => c !== null));
+}
+
+/** 枠の数に合わせ、持っていないカード・同じ行の2枚目を空きにする。後ろの空きは削る */
+export function fitLayout(
+  layout: readonly (readonly (CardId | null)[])[], elevators: number, slotCount: number, unlocked: readonly CardId[],
+): SlotLayout {
+  const out: SlotLayout = [];
+  for (let i = 0; i < elevators; i++) {
+    const src = layout[i] ?? [];
+    const row: SlotRow = [];
+    for (let k = 0; k < slotCount; k++) {
+      const c = src[k] ?? null;
+      row.push(c !== null && unlocked.includes(c) && !row.includes(c) ? c : null);
+    }
+    while (row.length > 0 && row[row.length - 1] === null) row.pop();
+    out.push(row);
+  }
+  return out;
+}
+
+function cloneLayout(layout: readonly (readonly (CardId | null)[])[]): SlotLayout {
+  return layout.map((r) => [...r]);
+}
+
+function setAt(row: SlotRow, k: number, c: CardId | null): void {
+  while (row.length <= k) row.push(null);
+  row[k] = c;
+}
+
+/**
+ * 手持ちのカードを枠へ置く。
+ * - その枠にあったカードは外れる(手持ちに戻る)
+ * - 同じカードがその行の別の枠にあれば、その2枠を入れ替える(同じカードは1基に1枚まで)
+ */
+export function dropFromHand(layout: readonly (readonly (CardId | null)[])[], row: number, slot: number, card: CardId): SlotLayout {
+  const out = cloneLayout(layout);
+  const r = out[row];
+  if (!r) return out;
+  const prev = r[slot] ?? null;
+  const at = r.indexOf(card);
+  if (at === slot) return out;
+  if (at >= 0) setAt(r, at, prev);
+  setAt(r, slot, card);
+  return out;
+}
+
+/**
+ * 枠のカードを別の枠へ移す。行き先にカードがあれば入れ替える。ほかのカードは動かない。
+ * 別の行へ移すとき、行き先の行に同じカードがあれば、そちらは空きにする(入れ替えで来るカードが元の行にすでにある場合も空きにする)。
+ */
+export function moveSlot(
+  layout: readonly (readonly (CardId | null)[])[], fromRow: number, fromSlot: number, toRow: number, toSlot: number,
+): SlotLayout {
+  const out = cloneLayout(layout);
+  const a = out[fromRow];
+  const b = out[toRow];
+  const card = a?.[fromSlot] ?? null;
+  if (!a || !b || card === null || (fromRow === toRow && fromSlot === toSlot)) return out;
+  const prev = b[toSlot] ?? null;
+  if (fromRow !== toRow) {
+    const dup = b.indexOf(card);
+    if (dup >= 0) b[dup] = null;
+    setAt(a, fromSlot, prev !== null && a.includes(prev) ? null : prev);
+  } else {
+    setAt(a, fromSlot, prev);
+  }
+  setAt(b, toSlot, card);
+  return out;
+}
+
+/** 枠のカードを外す(ほかのカードは動かない) */
+export function removeAt(layout: readonly (readonly (CardId | null)[])[], row: number, slot: number): SlotLayout {
+  const out = cloneLayout(layout);
+  const r = out[row];
+  if (r && slot < r.length) r[slot] = null;
+  return out;
+}

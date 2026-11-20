@@ -122,3 +122,30 @@ describe('進行状況を消すボタン', () => {
     expect(inRect(RESET_BUTTON, RESET_BUTTON.x + 1, RESET_BUTTON.y + 1)).toBe(true);
   });
 });
+
+describe('引っ張って置く方式(枠の位置は固定)', () => {
+  it('手持ちから空いた枠に置くと、その位置に入る(左へ詰めない)', async () => {
+    const { dropFromHand, compactLayout } = await import('../src/ui/editor.ts');
+    const out = dropFromHand([[]], 0, 2, 'nearest');
+    expect(out).toEqual([[null, null, 'nearest']]);
+    expect(compactLayout(out)).toEqual([['nearest']]);
+  });
+  it('手持ちからカードのある枠に置くと置き換わる。同じカードが別の枠にあれば2枠が入れ替わる。ほかは動かない', async () => {
+    const { dropFromHand } = await import('../src/ui/editor.ts');
+    expect(dropFromHand([['nearest', 'express']], 0, 1, 'sameDir')).toEqual([['nearest', 'sameDir']]);
+    expect(dropFromHand([['nearest', 'express', 'sameDir']], 0, 0, 'sameDir')).toEqual([['sameDir', 'express', 'nearest']]);
+  });
+  it('枠どうしは入れ替え。別の行へ移すとき、行き先の同じカードは空きになる', async () => {
+    const { moveSlot } = await import('../src/ui/editor.ts');
+    expect(moveSlot([['nearest', 'sameDir', 'express']], 0, 0, 0, 2)).toEqual([['express', 'sameDir', 'nearest']]);
+    expect(moveSlot([['nearest', null, 'express']], 0, 0, 0, 1)).toEqual([[null, 'nearest', 'express']]);
+    expect(moveSlot([['nearest'], ['sameDir', 'nearest']], 0, 0, 1, 0)).toEqual([['sameDir'], ['nearest', null]]);
+    expect(moveSlot([['nearest', 'sameDir'], ['sameDir']], 0, 0, 1, 0)).toEqual([[null, 'sameDir'], ['nearest']]);
+  });
+  it('外すと空きになり、ほかのカードは動かない。fitLayout は持っていないカード・2枚目を空きにし、後ろの空きを削る', async () => {
+    const { removeAt, fitLayout } = await import('../src/ui/editor.ts');
+    expect(removeAt([['nearest', 'sameDir', 'express']], 0, 1)).toEqual([['nearest', null, 'express']]);
+    expect(fitLayout([[null, 'nearest', 'nearest', 'express', null]], 1, 5, ['nearest'])).toEqual([[null, 'nearest']]);
+    expect(fitLayout([['nearest', 'sameDir', 'express']], 2, 2, ['nearest', 'sameDir', 'express'])).toEqual([['nearest', 'sameDir'], []]);
+  });
+});

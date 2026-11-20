@@ -15,7 +15,7 @@ export interface SaveData {
   /** ステージの id → 最高の星(0〜3) */
   bestStars: Record<number, number>;
   /** ステージの id → エレベーターごとのルールの枠 */
-  rules: Record<number, CardId[][]>;
+  rules: Record<number, (CardId | null)[][]>;
   /** 最後に選んでいたステージの id */
   lastStage: number;
   /** 音を消しているか(後から足した項目。古い保存データにはないので、ないときは false) */
@@ -64,10 +64,11 @@ export function parseSave(text: string | null): SaveData | null {
   if (isObj(raw['rules'])) {
     for (const [k, v] of Object.entries(raw['rules'])) {
       if (!isStageId(k) || !Array.isArray(v) || v.length > 8) continue;
-      const rows: CardId[][] = [];
+      const rows: (CardId | null)[][] = [];
       for (const row of v) {
         if (!Array.isArray(row)) { rows.push([]); continue; }
-        rows.push(row.filter(isCardId).slice(0, 5));
+        // null は空いた枠(2026-11-20、引っ張って置く方式で枠の位置を固定した)。知らない値は捨てる
+        rows.push(row.filter((c: unknown): c is CardId | null => c === null || isCardId(c)).slice(0, 5));
       }
       out.rules[Number(k)] = rows;
     }

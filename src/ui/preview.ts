@@ -51,11 +51,10 @@ function startRun(config: Omit<SimConfig, 'rules'>, rules: RuleSet, seed: number
   return { rules, sim, baseDelivered: sim.stats.delivered, baseMissed: sim.stats.missed };
 }
 
-/** ルールの組が変わったときだけ作り直す(同じなら今のものを返す) */
+/** ルールの組が変わったときだけ作り直す(同じなら今のものを返す)。sets は previewRuleSets などで作った組 */
 export function ensurePreview(
-  prev: Preview | null, config: Omit<SimConfig, 'rules'>, seed: number, base: RuleSet, row: number, held: CardId | null, slots: number,
+  prev: Preview | null, config: Omit<SimConfig, 'rules'>, seed: number, sets: RuleSet[], row: number, added: CardId | null,
 ): Preview {
-  const sets = previewRuleSets(base, row, held, slots);
   const key = `${seed}|${row}|${JSON.stringify(sets)}`;
   if (prev && prev.key === key) return prev;
   return {
@@ -63,7 +62,7 @@ export function ensurePreview(
     runs: sets.map((rules) => startRun(config, rules, seed)),
     shown: 0,
     row,
-    added: sets.length > 1 ? held : null,
+    added: sets.length > 1 ? added : null,
   };
 }
 

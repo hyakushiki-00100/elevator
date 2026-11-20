@@ -8,7 +8,7 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, START_BUTTON, START_DEMO, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
+  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, CARD_H, CARD_W, START_BUTTON, START_DEMO, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
   EDITOR_PREVIEW, type Layout, type Rect, type View,
 } from './layout.ts';
 import { CARD_LOOP_MS, drawCard, drawEmptySlot } from './cards.ts';
@@ -81,7 +81,8 @@ export interface DrawArgs {
   /** 編集画面用: 手持ちのカード・枠の数・編集中のルール・選択中の行 */
   unlocked: readonly CardId[];
   slotCount: number;
-  editRules: readonly (readonly CardId[])[];
+  /** 枠の並び(空いた枠は null。枠の位置は固定) */
+  editRules: readonly (readonly (CardId | null)[])[];
   editRow: number;
   /** この日に手に入れたカード(結果画面に出す) */
   newCards: readonly CardId[];
@@ -92,13 +93,19 @@ export interface DrawArgs {
   /** 音が鳴らせる状態か(準備を試したのに鳴らせないとき false。消音ボタンに黄色の点を出す) */
   audioOk: boolean;
   /** 編集画面: 持ち上げているカード(手持ちの何番目か。枠から持ち上げたときは null) */
-  held: { card: CardId; handIndex: number | null } | null;
+  drag: {
+    card: CardId;
+    x: number; y: number;
+    from: { kind: 'hand'; index: number } | { kind: 'slot'; row: number; slot: number };
+    /** 今離したら置かれる枠(枠の上でなければ null) */
+    target: { row: number; slot: number } | null;
+  } | null;
   /** 編集画面: 大きく再生するカード */
   previewCard: CardId | null;
   /** 編集画面: 本物のビルで試しに動かしているもの(なければ null) */
   simPreview: Preview | null;
   /** 編集画面: 初回の手本(指)をどこに出すか */
-  editorHint: { kind: 'hand'; index: number } | { kind: 'slot'; row: number; index: number } | null;
+  editorHint: { hand: number; row: number; slot: number } | null;
   /** 各ステージの形(階の数・エレベーターの本数): ステージの選択ボタンの絵に使う */
   stageShapes: readonly { floors: number; elevators: number }[];
   /** 編集画面のステージ選択: 開いているステージ数・選択中・各ステージの最高の星 */
@@ -719,27 +726,34 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     // 枠
     for (let i = 0; i < a.slotCount; i++) {
       const rc = slotRect(r, i);
-      const c = rules[i];
-      if (c) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { t: loopT });
+      const c = rules[i] ?? null;
+      const isOrigin = a.drag !== null && a.drag.from.kind === 'slot' && a.drag.from.row === r && a.drag.from.slot === i;
+      if (c && !isOrigin) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { t: loopT });
       else drawEmptySlot(ctx, rc.x, rc.y, rc.w, rc.h);
+      // 今離したら置かれる枠を光らせる
+      if (a.drag?.target && a.drag.target.row === r && a.drag.target.slot === i) {
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 3;
+        roundRect(ctx, rc.x - 3, rc.y - 3, rc.w + 6, rc.h + 6, 9);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
-    // かごから右へ順に流れる光(かごは左のカードから順に確かめる)
-    drawFlow(ctx, head, r, rules.length, color, a.now);
+    // かごから右へ順に流れる光(かごは左のカードから順に確かめる。空いた枠は飛ばす)
+    const filled: number[] = [];
+    for (let i = 0; i < a.slotCount; i++) if (rules[i]) filled.push(i);
+    drawFlow(ctx, head, r, filled, color, a.now);
   }
 
-  // 手持ち。持ち上げているカードは浮かせて光らせる。選択中の行に置いてあるカードは薄く
+  // 手持ち。選択中の行に置いてあるカードは薄く。説明を見ているカードは枠で示す
   const placed = a.editRules[a.editRow] ?? [];
   a.unlocked.forEach((c, i) => {
     const rc = handRect(i);
-    const isHeld = a.held !== null && a.held.handIndex === i;
-    const lift = isHeld ? -10 : 0;
-    if (isHeld) {
-      ctx.save();
-      ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 18;
-    }
-    drawCard(ctx, c, rc.x, rc.y + lift, rc.w, rc.h, { dim: !isHeld && placed.includes(c), t: loopT, active: isHeld });
-    if (isHeld) ctx.restore();
+    const picked = a.drag === null && a.previewCard === c;
+    drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { dim: placed.includes(c), t: loopT, active: picked });
   });
 
   // 大きな再生の窓
@@ -784,11 +798,34 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   fillCircle(ctx, b.x + b.w / 2, b.y + b.h / 2, (b.w / 2) * pulse, '#3fbf6a');
   iconPlay(ctx, b.x + b.w / 2 + 3, b.y + b.h / 2, b.w / 2);
 
-  // 初回の手本: 指が「手持ちのカード → 枠」の順にタップしてみせる
+  // 手本: 指が手持ちのカードを押さえ、枠まで引っ張ってみせる(カードの影が一緒に動く)
   if (a.editorHint) {
-    const target = a.editorHint.kind === 'hand' ? handRect(a.editorHint.index) : slotRect(a.editorHint.row, a.editorHint.index);
-    const phase = (a.now % 1200) / 1200;
-    drawPointer(ctx, target.x + target.w * 0.55, target.y + target.h * 0.55, 46, phase > 0.5 && phase < 0.75);
+    const from = handRect(a.editorHint.hand);
+    const to = slotRect(a.editorHint.row, a.editorHint.slot);
+    const u = (a.now % 2200) / 2200;
+    const k = u < 0.2 ? 0 : u < 0.75 ? (u - 0.2) / 0.55 : 1;
+    const e = k * k * (3 - 2 * k);
+    const x = from.x + (to.x - from.x) * e;
+    const y = from.y + (to.y - from.y) * e;
+    if (u >= 0.12 && u < 0.85) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      drawCard(ctx, a.unlocked[a.editorHint.hand]!, x, y, from.w, from.h, {});
+      ctx.restore();
+    }
+    drawPointer(ctx, x + from.w * 0.55, y + from.h * 0.55, 46, u >= 0.12 && u < 0.85);
+  }
+
+  // 引っ張っているカード(指に付いてくる。一番上に描く)
+  if (a.drag) {
+    const w = CARD_W * 1.1;
+    const h = CARD_H * 1.1;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 6;
+    drawCard(ctx, a.drag.card, a.drag.x - w / 2, a.drag.y - h / 2, w, h, { t: loopT, active: true });
+    ctx.restore();
   }
 }
 
@@ -824,9 +861,9 @@ function drawResetConfirm(ctx: CanvasRenderingContext2D): void {
 }
 
 /** かごから右のカードへ、順に流れる光の粒(カードを左から順に確かめることを見せる) */
-function drawFlow(ctx: CanvasRenderingContext2D, head: Rect, row: number, placedCount: number, color: string, now: number): void {
+function drawFlow(ctx: CanvasRenderingContext2D, head: Rect, row: number, filled: readonly number[], color: string, now: number): void {
   const stops = [head.x + head.w - 4];
-  for (let i = 0; i < Math.max(1, placedCount); i++) {
+  for (const i of filled.length > 0 ? filled : [0]) {
     const rc = slotRect(row, i);
     stops.push(rc.x + rc.w / 2);
   }
@@ -878,8 +915,8 @@ function drawSimPreview(ctx: CanvasRenderingContext2D, r: Rect, p: Preview, now:
     if (row.length === 0) {
       drawEmptySlot(ctx, x + w / 2 - cardW / 2, y, cardW, cardH);
     }
-    row.forEach((c, k) => {
-      const isAdded = i === 1 && k === 0 && p.added === c;
+    row.forEach((c) => {
+      const isAdded = i === 1 && p.added === c;
       if (isAdded) {
         ctx.save();
         ctx.shadowColor = '#ffffff';
