@@ -1,3 +1,4 @@
+import { UNITS_PER_FLOOR } from '../sim/building.ts';
 import { STORY_LOOP_MS, storyAt } from './story.ts';
 import type { Elevator } from '../sim/elevator.ts';
 import type { Passenger } from '../sim/passenger.ts';
@@ -307,6 +308,19 @@ function drawElevator(
   const h = carHeight(l);
   const w = l.shaftW;
 
+  // 行き先: 移動中は、止まる予定の階にかごの形の点線を描く(どこへ向かっているかが見えるように)
+  if (e.phase === 'moving') {
+    const ty = carTop(l, e.target * UNITS_PER_FLOOR);
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = elevatorColor(e.id);
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, x + 3, ty + 1, w - 6, h - 2, 6);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.fillStyle = T().metal ? metalGradient(ctx, x, y, w, h, T().carBody) : T().carBody;
   roundRect(ctx, x + 1, y, w - 2, h, 6);
   ctx.fill();
@@ -338,6 +352,14 @@ function drawElevator(
       const cx = x + 7 + pitch * (col + 0.5);
       const cy = y + h - 7 - r - row * (r * 2 + 3);
       fillCircle(ctx, cx, cy, r, floorColor(p.dest));
+      // 次に止まる階で降りる人は白い輪で示す(なぜその階へ向かうのかが見えるように)
+      if (e.phase === 'moving' && p.dest === e.target) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (k === 0) drawNumber(ctx, String(p.dest + 1), cx, cy + r * 0.45, Math.round(r * 1.35), '#0b0d12');
       n++;
     }
