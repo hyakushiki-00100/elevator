@@ -38,6 +38,9 @@ export interface Passenger {
   waitTicks: number;
 }
 
+/** 見本: 左端のドアから行列まで歩く長さ(tick)。案A(見た目だけ)と案B(sim も待つ)で同じ値を使う */
+export const SAMPLE_WALK_TICKS = 36;
+
 export interface Stats {
   spawned: number;
   boarded: number;

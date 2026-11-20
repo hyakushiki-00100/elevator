@@ -1,4 +1,5 @@
 import { UNITS_PER_FLOOR } from '../sim/building.ts';
+import { SAMPLE_WALK_TICKS } from '../sim/passenger.ts';
 import { STORY_LOOP_MS, storyAt } from './story.ts';
 import { BRANCH_FREEZE, type Branch, type Preview } from '../ui/preview.ts';
 import type { Elevator } from '../sim/elevator.ts';
@@ -114,6 +115,8 @@ export interface DrawArgs {
   bestStars: readonly number[];
   /** 進行状況を消す前の確かめの窓を出しているか */
   confirmReset: boolean;
+  /** 見本: 人のアイコンと、左のドアから歩いて登場する動き(a=見た目だけ / b=sim も待つ)。null は今までどおり */
+  walk: 'a' | 'b' | null;
   /** 1日目の最初の数回: 待っている人の階を指で示す */
   playHint: boolean;
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
@@ -137,7 +140,8 @@ export function draw(a: DrawArgs): void {
   const multi = s.elevators.length > 1;
   // 2基以上: 選んでいるエレベーターの通り道(シャフト)を、そのエレベーターの色で縦いっぱいに光らせる
   if (multi && a.selected !== null && a.mode === 'playing') drawSelectedShaft(ctx, l, a.selected, a.now);
-  drawQueues(ctx, l, s);
+  if (a.walk) drawQueuesWalking(ctx, l, s, a.walk, a.now);
+  else drawQueues(ctx, l, s);
   s.elevators.forEach((e, i) => {
     const prev = a.prevPos[i] ?? e.pos;
     const pos = prev + (e.pos - prev) * a.alpha;
@@ -279,6 +283,118 @@ function drawQueues(ctx: CanvasRenderingContext2D, l: Layout, s: SimState): void
       drawPassenger(ctx, p, x + w / 2, baseY, unit, remain, maxR);
     }
   }
+}
+
+/**
+ * 見本: 各階の左端にドアを描き、待っている人を「人の形」で描く。新しく来た人はドアから出て、行列の最後尾まで歩く。
+ * a: 見た目だけ歩く(sim では現れた瞬間から待っている) / b: sim でも着くまで待つ(spawnTick が着く時刻)。
+ */
+function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, mode: 'a' | 'b', now: number): void {
+  const W = SAMPLE_WALK_TICKS;
+  const byFloor: Passenger[][] = Array.from({ length: l.floors }, () => []);
+  for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
+  const doorX = 12;
+  const doorW = 24;
+  const avail = l.queueRight - l.queueLeft;
+  for (let f = 0; f < l.floors; f++) {
+    const top = floorTop(l, f);
+    const baseY = top + l.floorH - 2;
+    const q = byFloor[f]!;
+    // 歩いている人の進み具合(0=ドア 1=行列)
+    const progress = (p: Passenger): number => {
+      const t = mode === 'a' ? (s.tick - p.spawnTick) / W : 1 - (p.spawnTick - s.tick) / W;
+      return Math.max(0, Math.min(1, t));
+    };
+    // ドア: 誰かが出てきたばかりなら開いている
+    const doorH = Math.min(l.floorH - 10, 60);
+    const dy = baseY - doorH;
+    let open = 0;
+    for (const p of q) {
+      const t = progress(p);
+      if (t < 1) open = Math.max(open, t < 0.25 ? t / 0.25 : t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4);
+    }
+    ctx.fillStyle = T().shaft;
+    ctx.fillRect(doorX, dy, doorW, doorH);
+    ctx.fillStyle = T().door;
+    ctx.fillRect(doorX, dy, doorW * (1 - open * 0.85), doorH);
+    ctx.strokeStyle = T().floorLine;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(doorX, dy, doorW, doorH);
+    if (q.length === 0) continue;
+    let slots = 0;
+    for (const p of q) slots += SLOT_WIDTH[p.kind];
+    const unit = Math.min(l.floorH * 0.42, avail / slots);
+    const maxR = l.floorH * 0.15;
+    let x = l.queueRight;
+    for (const p of q) {
+      const w = SLOT_WIDTH[p.kind] * unit;
+      x -= w;
+      const slotX = x + w / 2;
+      const t = progress(p);
+      const startX = doorX + doorW / 2;
+      const px = startX + (slotX - startX) * t;
+      const walking = t < 1;
+      const arrived = mode === 'a' ? s.tick - p.spawnTick : s.tick - p.spawnTick;
+      const remain = Math.max(0, 1 - Math.max(0, arrived) / p.patience);
+      drawPerson(ctx, p, px, baseY, unit, walking ? 1 : remain, maxR, walking ? now : null);
+    }
+  }
+}
+
+/** 人の形(頭と胴)。行き先の色。種類: 急ぎ=前かがみ+線 / 団体=3人 / 荷物持ち=かばん。足元の棒が我慢の残り */
+function drawPerson(
+  ctx: CanvasRenderingContext2D, p: Passenger, cx: number, footY: number, unit: number, remain: number, maxR: number, walkNow: number | null,
+): void {
+  const r = Math.max(4, Math.min(maxR, unit * 0.38));
+  const color = floorColor(p.dest);
+  const bob = walkNow !== null ? Math.abs(Math.sin(walkNow / 90)) * 2 : 0;
+  const shake = remain < 0.25 && walkNow === null ? Math.sin(remain * 400) * 1.5 : 0;
+  const one = (x: number, scale: number, lean: number): void => {
+    const hr = r * 0.55 * scale;
+    const bw = r * 1.25 * scale;
+    const bh = r * 1.35 * scale;
+    const by = footY - 6 - bh - bob;
+    ctx.save();
+    ctx.translate(x + shake, footY - 6);
+    ctx.rotate(lean);
+    ctx.translate(-(x + shake), -(footY - 6));
+    ctx.fillStyle = color;
+    roundRect(ctx, x + shake - bw / 2, by, bw, bh, bw * 0.35);
+    ctx.fill();
+    fillCircle(ctx, x + shake, by - hr - 1.5, hr, color);
+    ctx.restore();
+  };
+  if (p.kind === 'group') {
+    one(cx - r * 1.1, 0.8, 0);
+    one(cx + r * 1.1, 0.8, 0);
+    one(cx, 0.9, 0);
+  } else if (p.kind === 'rushed') {
+    one(cx, 1, 0.25);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const k of [0, 1]) {
+      const yy = footY - 6 - r * (0.6 + k * 0.6) - bob;
+      ctx.moveTo(cx - r * 1.4, yy); ctx.lineTo(cx - r * 0.9, yy);
+    }
+    ctx.stroke();
+  } else if (p.kind === 'luggage') {
+    one(cx - r * 0.45, 1, 0);
+    ctx.fillStyle = '#c9a26b';
+    ctx.fillRect(cx + r * 0.45, footY - 6 - r * 0.9, r * 0.9, r * 0.9);
+  } else {
+    one(cx, 1, 0);
+  }
+  // 我慢の残り: 足元の短い棒(緑→赤)。歩いている間は出さない
+  if (walkNow === null) {
+    const bw = r * 1.8;
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(cx - bw / 2, footY - 4, bw, 3);
+    ctx.fillStyle = `hsl(${(120 * remain).toFixed(0)} 85% 55%)`;
+    ctx.fillRect(cx - bw / 2, footY - 4, bw * remain, 3);
+  }
+  const headTop = footY - 6 - r * 1.35 - r * 1.1 - 3 - bob;
+  drawNumber(ctx, String(p.dest + 1), cx, headTop - 3, Math.max(12, Math.round(r * 1.5)), T().text);
 }
 
 /** 乗客1人。cx: 中心x、footY: 足元y、unit: 1人分の幅 */

@@ -180,7 +180,7 @@ function serve(e: Elevator, w: World): void {
   // 乗る(待ち行列の順。入りきらない人は飛ばして、次の人を試す)
   let load = loadOf(e, w);
   for (const p of w.passengers) {
-    if (p.state === 'waiting' && p.origin === cur && load + p.size <= b.capacity) {
+    if (p.state === 'waiting' && p.origin === cur && p.spawnTick <= w.tick && load + p.size <= b.capacity) {
       p.state = 'riding';
       p.elevatorId = e.id;
       load += p.size;

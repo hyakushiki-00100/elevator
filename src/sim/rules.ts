@@ -96,6 +96,8 @@ export function hallCalls(e: Elevator, w: World, load: number): boolean[] {
   const hall = new Array<boolean>(floors).fill(false);
   for (const p of w.passengers) {
     if (p.state !== 'waiting' || load + p.size > w.building.capacity) continue;
+    // まだ歩いて向かっている人(見本の案B)は呼び出しにならない
+    if (p.spawnTick > w.tick) continue;
     if (!servesFloor(e.rules, p.origin, floors)) continue;
     hall[p.origin] = true;
   }

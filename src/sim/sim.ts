@@ -10,6 +10,11 @@ export interface SimConfig {
   traffic: DayPlan;
   /** エレベーターごとのルールの枠(上から順に評価)。省略すると全基が手動のみ */
   rules?: readonly (readonly CardId[])[];
+  /**
+   * 見本(案B、2026-11-20、まだ本採用ではない): 乗客が左端のドアから歩いて行列に着くまでの tick。
+   * 着くまでは呼び出しにならず、乗れず、我慢の時間も数えない(spawnTick を着く時刻にずらす)。省略・0 なら今までどおり。
+   */
+  walkTicks?: number;
 }
 
 export interface SimState {
@@ -109,6 +114,7 @@ export function step(s: SimState, commands: readonly Command[] = []): void {
     const ph = s.config.traffic.phases[s.phaseIndex]!;
     const p = maybeSpawn(ph, at.offset, s.rng, s.config.building, s.tick, s.nextId);
     if (p) {
+      if (s.config.walkTicks) p.spawnTick = s.tick + s.config.walkTicks;
       s.nextId++;
       s.passengers.push(p);
       s.stats.spawned++;
