@@ -75,10 +75,30 @@ export class SoundPlayer {
     return this.ctx?.state ?? 'none';
   }
 
-  /** 利用者の操作(タップ)の中で呼ぶ。2回目以降は、止まっていれば再開するだけ */
+  /** unlock を一度でも試したか(音の準備の印を出すかの判定に使う) */
+  tried = false;
+
+  /** 音が鳴らせる状態か(準備を試したのに running でなければ false) */
+  get ok(): boolean {
+    return !this.tried || this.ctx?.state === 'running';
+  }
+
+  /**
+   * 利用者の操作(タップ)の中で呼ぶ。2回目以降は、止まっていれば再開するだけ。
+   * iPhone の Safari では、指が触れた瞬間(pointerdown)を許可と見なさないことがあるため、
+   * 指を離したとき(pointerup・touchend・click)にも呼ぶ。
+   */
   unlock(): void {
+    this.tried = true;
     try {
       if (!this.ctx) {
+        // マナーモード(消音スイッチ)でも効果音を鳴らす設定(Safari の Audio Session API。ない環境では何もしない)
+        try {
+          const nav = navigator as Navigator & { audioSession?: { type: string } };
+          if (nav.audioSession) nav.audioSession.type = 'playback';
+        } catch {
+          // 何もしない
+        }
         const Ctor = (globalThis as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
           ?? (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (!Ctor) return;
@@ -87,11 +107,23 @@ export class SoundPlayer {
         this.master.gain.value = 0.8;
         this.master.connect(this.ctx.destination);
       }
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // Safari では suspended のほかに interrupted(電話や裏に回ったあと)もあるので、running 以外はすべて再開を試す
+      if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') void this.ctx.resume();
+      // 無音の短い音を1回鳴らす(iOS で音の出力を有効にする定番の手順)
+      if (!this.primed) {
+        const buf = this.ctx.createBuffer(1, 1, 22050);
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(this.ctx.destination);
+        src.start(0);
+        this.primed = true;
+      }
     } catch {
       this.ctx = null;
     }
   }
+
+  private primed = false;
 
   /** 画面が隠れたら止め、戻ったら再開する(電池と、裏で鳴り続けるのを防ぐため) */
   setHidden(hidden: boolean): void {

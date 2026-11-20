@@ -87,6 +87,8 @@ export interface DrawArgs {
   result: DayResult | null;
   /** 音を消しているか(消音ボタンの絵) */
   muted: boolean;
+  /** 音が鳴らせる状態か(準備を試したのに鳴らせないとき false。消音ボタンに黄色の点を出す) */
+  audioOk: boolean;
   /** 編集画面: 持ち上げているカード(手持ちの何番目か。枠から持ち上げたときは null) */
   held: { card: CardId; handIndex: number | null } | null;
   /** 編集画面: 大きく再生するカード */
@@ -143,6 +145,7 @@ export function draw(a: DrawArgs): void {
   roundRect(ctx, mb.x, mb.y, mb.w, mb.h, 6);
   ctx.fill();
   iconSpeaker(ctx, mb.x + mb.w / 2, mb.y + mb.h / 2, mb.w * 0.36, a.muted);
+  if (!a.muted && !a.audioOk) fillCircle(ctx, mb.x + mb.w - 5, mb.y + 5, 5, '#f5c542');
   drawTapRipples(ctx, a.effects, a.now);
   ctx.restore();
 

@@ -416,6 +416,10 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (r.command) pending.push(r.command);
 });
 
+// iPhone の Safari では、指を離したときの操作でないと音の許可にならないことがあるので、ここでも準備する
+for (const type of ['pointerup', 'touchend', 'click'] as const) {
+  window.addEventListener(type, () => sound.unlock(), { capture: true, passive: true });
+}
 document.addEventListener('visibilitychange', () => sound.setHidden(document.hidden));
 
 const DT = 1000 / TICKS_PER_SECOND;
@@ -479,7 +483,7 @@ function frame(now: number): void {
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
-    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted,
+    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
     held, previewCard: held?.card ?? previewCard, editorHint: mode === 'ready' ? editorHint() : null,
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
     result: mode === 'result' ? dayResult : null,
