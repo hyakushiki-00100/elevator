@@ -134,11 +134,18 @@ export function draw(a: DrawArgs): void {
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
 
   drawBuilding(ctx, l, s, a.now);
+  const multi = s.elevators.length > 1;
+  // 2基以上: 選んでいるエレベーターの通り道(シャフト)を、そのエレベーターの色で縦いっぱいに光らせる
+  if (multi && a.selected !== null && a.mode === 'playing') drawSelectedShaft(ctx, l, a.selected, a.now);
   drawQueues(ctx, l, s);
   s.elevators.forEach((e, i) => {
     const prev = a.prevPos[i] ?? e.pos;
     const pos = prev + (e.pos - prev) * a.alpha;
-    drawElevator(ctx, l, s, e, pos, a.selected === i);
+    // 選んでいないかごは少し暗く(選んでいるかごを目立たせる)
+    const dimmed = multi && a.selected !== null && a.selected !== i && a.mode === 'playing';
+    if (dimmed) ctx.globalAlpha = 0.55;
+    drawElevator(ctx, l, s, e, pos, a.selected === i, a.now, multi && a.selected === null && a.mode === 'playing');
+    ctx.globalAlpha = 1;
   });
   drawEffects(ctx, l, a.effects, a.now);
   if (a.mode === 'playing' && a.playHint) drawPlayHint(ctx, l, s, a.now);
@@ -312,6 +319,7 @@ function drawPassenger(
 
 function drawElevator(
   ctx: CanvasRenderingContext2D, l: Layout, s: SimState, e: Elevator, pos: number, selected: boolean,
+  now = 0, invite = false,
 ): void {
   const x = l.shaftX[e.id]!;
   const y = carTop(l, pos);
@@ -343,10 +351,23 @@ function drawElevator(
   roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 4);
   ctx.fill();
   if (selected && s.elevators.length > 1) {
-    ctx.strokeStyle = `rgb(${T().highlightRgb})`;
-    ctx.lineWidth = 2.5;
-    roundRect(ctx, x - 1, y - 1, w + 2, h + 2, 7);
+    // 選んでいるかご: 白い太い縁と、そのエレベーターの色の光(ゆっくり脈打つ)
+    ctx.save();
+    ctx.shadowColor = elevatorColor(e.id);
+    ctx.shadowBlur = 14 + 6 * Math.sin(now / 200);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    roundRect(ctx, x - 3, y - 3, w + 6, h + 6, 8);
     ctx.stroke();
+    ctx.restore();
+  } else if (invite) {
+    // まだどちらも選んでいない: 両方のかごの縁を点滅させて「まずかごを選ぶ」と示す
+    if (Math.floor(now / 450) % 2 === 0) {
+      ctx.strokeStyle = elevatorColor(e.id);
+      ctx.lineWidth = 3;
+      roundRect(ctx, x - 3, y - 3, w + 6, h + 6, 8);
+      ctx.stroke();
+    }
   }
 
   // 乗客(1人分につき1つの丸。数字は先頭のみ)
@@ -401,6 +422,23 @@ function drawElevator(
     ctx.closePath();
     ctx.fill();
   }
+}
+
+/** 選んでいるエレベーターのシャフトを、その色で縦いっぱいに塗り、両側に線を引く */
+function drawSelectedShaft(ctx: CanvasRenderingContext2D, l: Layout, idx: number, now: number): void {
+  const x = l.shaftX[idx];
+  if (x === undefined) return;
+  const color = elevatorColor(idx);
+  const top = l.top;
+  const h = l.floors * l.floorH;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.16 + 0.04 * Math.sin(now / 300);
+  ctx.fillRect(x, top, l.shaftW, h);
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(x - 3, top, 3, h);
+  ctx.fillRect(x + l.shaftW, top, 3, h);
+  ctx.restore();
 }
 
 /** 扉の開き具合 0〜1 */
