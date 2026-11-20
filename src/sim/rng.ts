@@ -29,4 +29,11 @@ export class Rng {
   getState(): number {
     return this.s;
   }
+
+  /** 状態を写し取った乱数を作る(編集画面の「分かれ道」で、同じ場面を別のルールで1歩だけ進めるため) */
+  clone(): Rng {
+    const r = new Rng(0);
+    r.s = this.s;
+    return r;
+  }
 }

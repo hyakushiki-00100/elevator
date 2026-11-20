@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STAGES } from '../src/sim/stages.ts';
 import type { CardId } from '../src/sim/rules.ts';
-import { advancePreview, ensurePreview as ensureSets, PREVIEW_SHOW, PREVIEW_WARMUP, previewRuleSets, type Preview } from '../src/ui/preview.ts';
+import { advancePreview, cloneSim, findBranches, ensurePreview as ensureSets, PREVIEW_SHOW, PREVIEW_WARMUP, previewRuleSets, type Preview } from '../src/ui/preview.ts';
 import type { RuleSet } from '../src/ui/editor.ts';
 
 /** 持ち上げたカードを先頭に足す比べ方で作る(main.ts のタップしたときと同じ) */
@@ -33,12 +33,12 @@ describe('試しに動かす窓', () => {
     expect(ensurePreview(a, cfg, st.seed, [['nearest']], 0, null, 2)).toBe(a);
     const b = ensurePreview(a, cfg, st.seed, [['nearest']], 0, 'sameDir', 2);
     expect(b).not.toBe(a);
-    expect(b.runs).toHaveLength(2);
+    expect(b.branches).not.toBeNull();
     expect(b.added).toBe('sameDir');
   });
 
   it('見せる長さを過ぎたら最初からやり直す。本物の sim と同じ判断で動く(同じルールなら同じ結果)', () => {
-    const p = ensurePreview(null, cfg, st.seed, [['nearest']], 0, 'sameDir', 2);
+    const p = ensurePreview(null, cfg, st.seed, [['nearest']], 0, null, 2);
     for (let i = 0; i * 3 < PREVIEW_SHOW; i++) advancePreview(p, cfg, st.seed);
     expect(p.shown).toBeGreaterThanOrEqual(PREVIEW_SHOW);
     advancePreview(p, cfg, st.seed);
@@ -50,3 +50,23 @@ describe('試しに動かす窓', () => {
     expect(q.runs[0]!.sim.stats).toEqual(r.runs[0]!.sim.stats);
   });
 });
+
+describe('分かれ道', () => {
+  it('カードなし → 「近い」では、カードなしは止まらず、カードありは階に止まる分かれ道が見つかる', () => {
+    const br = findBranches(cfg, st.seed, [[]], [['nearest']], 0);
+    expect(br.length).toBeGreaterThan(0);
+    expect(br[0]!.a.stops).toEqual([]);
+    expect(br[0]!.b.stops.length).toBeGreaterThan(0);
+  });
+  it('同じルールどうしでは分かれ道は見つからない。探しても元の状態は変わらない', () => {
+    expect(findBranches(cfg, st.seed, [['nearest']], [['nearest']], 0)).toEqual([]);
+    const p = ensurePreview(null, cfg, st.seed, [['nearest']], 0, null, 2);
+    const s = p.runs[0]!.sim;
+    const before = JSON.stringify({ ...s, rng: s.rng.getState() });
+    const c = cloneSim(s);
+    for (let i = 0; i < 50; i++) advancePreview({ ...p, runs: [{ ...p.runs[0]!, sim: c }] }, cfg, st.seed);
+    expect(JSON.stringify({ ...s, rng: s.rng.getState() })).toBe(before);
+    expect(c.rng.getState()).not.toBe(s.rng.getState());
+  });
+});
+

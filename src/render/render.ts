@@ -1,6 +1,6 @@
 import { UNITS_PER_FLOOR } from '../sim/building.ts';
 import { STORY_LOOP_MS, storyAt } from './story.ts';
-import type { Preview } from '../ui/preview.ts';
+import { BRANCH_FREEZE, type Branch, type Preview } from '../ui/preview.ts';
 import type { Elevator } from '../sim/elevator.ts';
 import type { Passenger } from '../sim/passenger.ts';
 import type { ScoreResult } from '../sim/score.ts';
@@ -936,6 +936,10 @@ function drawSimPreview(ctx: CanvasRenderingContext2D, r: Rect, p: Preview, now:
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   roundRect(ctx, r.x, r.y, r.w, r.h, 12);
   ctx.fill();
+  if (p.branches && p.branches.length > 0) {
+    drawBranchView(ctx, r, p, now);
+    return;
+  }
   const n = p.runs.length;
   const gap = 10;
   const w = (r.w - 16 - gap * (n - 1)) / n;
@@ -987,12 +991,92 @@ function drawSimPreview(ctx: CanvasRenderingContext2D, r: Rect, p: Preview, now:
   }
 }
 
+/** カードの並びを小さく描く(分かれ道の窓の上段)。added は光らせる */
+function drawRuleStrip(ctx: CanvasRenderingContext2D, row: readonly CardId[], cx: number, y: number, h: number, added: CardId | null, now: number): void {
+  const w = h * (36 / 47);
+  const gap = 4;
+  const tot = row.length * w + Math.max(0, row.length - 1) * gap;
+  if (row.length === 0) {
+    drawEmptySlot(ctx, cx - w / 2, y, w, h);
+    return;
+  }
+  let x = cx - tot / 2;
+  for (const c of row) {
+    const isAdded = added === c;
+    if (isAdded) {
+      ctx.save();
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 10 + 6 * Math.sin(now / 200);
+    }
+    drawCard(ctx, c, x, y, w, h, { active: isAdded });
+    if (isAdded) ctx.restore();
+    x += w + gap;
+  }
+}
+
+/**
+ * 分かれ道の窓: 同じ場面から、今のルール(灰色のかご)と、カードを足したルール(そのエレベーターの色のかご)が
+ * それぞれどう動くかを、1つのビルの上で重ねて見せる。止まった階には、それぞれの色の印を残す。
+ */
+function drawBranchView(ctx: CanvasRenderingContext2D, r: Rect, p: Preview, now: number): void {
+  const br = p.branches![p.bIndex]!;
+  const e = br.elevator;
+  const color = elevatorColor(e);
+  const gray = '#9aa0a6';
+  // 上段: 今のルール(灰色の印) → 足したルール(エレベーターの色の印)
+  const topY = r.y + 10;
+  const stripH = 40;
+  const leftC = r.x + r.w * 0.27;
+  const rightC = r.x + r.w * 0.73;
+  drawRuleStrip(ctx, p.sets[0]![p.row] ?? [], leftC, topY, stripH, null, now);
+  drawRuleStrip(ctx, p.sets[1]![p.row] ?? [], rightC, topY, stripH, p.added, now);
+  ctx.fillStyle = gray;
+  ctx.fillRect(leftC - 30, topY + stripH + 5, 60, 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(rightC - 30, topY + stripH + 5, 60, 4);
+  ctx.fillStyle = T().text;
+  ctx.beginPath();
+  ctx.moveTo(r.x + r.w / 2 + 6, topY + stripH / 2);
+  ctx.lineTo(r.x + r.w / 2 - 4, topY + stripH / 2 - 7);
+  ctx.lineTo(r.x + r.w / 2 - 4, topY + stripH / 2 + 7);
+  ctx.closePath();
+  ctx.fill();
+  // ビル(人は分かれ道の瞬間のまま止めて描く。動かすのはかごだけ)
+  const bx = r.x + 10;
+  const by = topY + stripH + 16;
+  const bw = r.w - 20;
+  const bh = r.h - (by - r.y) - 24;
+  const k = Math.max(0, p.bT - BRANCH_FREEZE);
+  const posAt = (path: Branch['a']): number => {
+    if (k <= 0 || path.pos.length === 0) return br.before.elevators[e]!.pos;
+    return path.pos[Math.min(path.pos.length - 1, k - 1)]!;
+  };
+  drawMiniBuilding(ctx, bx, by, bw, bh, br.before, {
+    elevator: e,
+    cars: [
+      { pos: posAt(br.a), color: gray, alpha: 0.75, offset: -0.18, stops: br.a.stops.filter((_, i) => br.a.stopAt[i]! < k) },
+      { pos: posAt(br.b), color, alpha: 1, offset: 0.18, stops: br.b.stops.filter((_, i) => br.b.stopAt[i]! < k) },
+    ],
+  });
+  // 下段: いくつ目の分かれ道か(点)
+  const n = p.branches!.length;
+  for (let i = 0; i < n; i++) {
+    fillCircle(ctx, r.x + r.w / 2 + (i - (n - 1) / 2) * 14, r.y + r.h - 12, 4, i === p.bIndex ? T().text : 'rgba(255,255,255,0.25)');
+  }
+}
+
 /** 小さなビル(試しに動かす窓用)。階の帯・待っている人(行き先の色の丸)・かご(エレベーターの色)・行き先の点線 */
-function drawMiniBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: SimState): void {
+interface GhostCars {
+  /** このエレベーターのかごの代わりに、cars を重ねて描く */
+  elevator: number;
+  cars: { pos: number; color: string; alpha: number; offset: number; stops: number[] }[];
+}
+
+function drawMiniBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: SimState, ghost?: GhostCars): void {
   const floors = s.building.floors;
   const fh = h / floors;
   const ne = s.elevators.length;
-  const shaftW = Math.min(34, (w * 0.42) / ne);
+  const shaftW = Math.min(ghost ? 60 : 34, (w * 0.42) / ne);
   const shaftX0 = x + w - ne * shaftW - 2;
   const fy = (f: number): number => y + (floors - 1 - f) * fh;
   for (let f = 0; f < floors; f++) {
@@ -1014,6 +1098,26 @@ function drawMiniBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w
   // かご
   s.elevators.forEach((e, i) => {
     const sx = shaftX0 + i * shaftW;
+    if (ghost && ghost.elevator === i) {
+      // 分かれ道: 2台のかごを少し左右にずらして重ね、止まった階に印を残す
+      for (const g of ghost.cars) {
+        const ox = g.offset * shaftW;
+        for (const f of g.stops) {
+          fillCircle(ctx, sx + shaftW / 2 + ox * 2.4, fy(f) + fh / 2, Math.max(3, fh * 0.12), g.color);
+        }
+        const gy = y + (floors - 1 - g.pos / UNITS_PER_FLOOR) * fh + 1;
+        ctx.save();
+        ctx.globalAlpha = g.alpha;
+        ctx.fillStyle = T().carBody;
+        roundRect(ctx, sx + 3 + ox, gy, shaftW - 6, fh - 2, 3);
+        ctx.fill();
+        ctx.strokeStyle = g.color;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
     const pos = e.pos / UNITS_PER_FLOOR;
     const cy = y + (floors - 1 - pos) * fh + 1;
     if (e.phase === 'moving') {
