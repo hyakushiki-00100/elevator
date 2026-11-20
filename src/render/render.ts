@@ -1,5 +1,6 @@
 import { UNITS_PER_FLOOR } from '../sim/building.ts';
 import { STORY_LOOP_MS, storyAt } from './story.ts';
+import type { Preview } from '../ui/preview.ts';
 import type { Elevator } from '../sim/elevator.ts';
 import type { Passenger } from '../sim/passenger.ts';
 import type { ScoreResult } from '../sim/score.ts';
@@ -94,6 +95,8 @@ export interface DrawArgs {
   held: { card: CardId; handIndex: number | null } | null;
   /** 編集画面: 大きく再生するカード */
   previewCard: CardId | null;
+  /** 編集画面: 本物のビルで試しに動かしているもの(なければ null) */
+  simPreview: Preview | null;
   /** 編集画面: 初回の手本(指)をどこに出すか */
   editorHint: { kind: 'hand'; index: number } | { kind: 'slot'; row: number; index: number } | null;
   /** 各ステージの形(階の数・エレベーターの本数): ステージの選択ボタンの絵に使う */
@@ -740,7 +743,8 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   });
 
   // 大きな再生の窓
-  drawPreview(ctx, EDITOR_PREVIEW, a.previewCard, a.now);
+  if (a.simPreview) drawSimPreview(ctx, EDITOR_PREVIEW, a.simPreview, a.now);
+  else drawPreview(ctx, EDITOR_PREVIEW, a.previewCard, a.now);
 
   // ルールの共有(書き出し・読み込み)
   for (const [b, dir] of [[SHARE_EXPORT_BUTTON, 'out'], [SHARE_IMPORT_BUTTON, 'in']] as const) {
@@ -847,6 +851,120 @@ function drawFlow(ctx: CanvasRenderingContext2D, head: Rect, row: number, placed
   ctx.shadowBlur = 12;
   fillCircle(ctx, px, y, 5, color);
   ctx.restore();
+}
+
+/**
+ * 試しに動かす窓: 本物のビルを小さく描く。2つあれば左右に並べる(左=今のルール、右=持ち上げたカードを先頭に足したルール)。
+ * 各窓の上に、選択中の行のカードの並び、下に「運んだ人数」と「取りこぼし」(見せ始めてからの数)。
+ */
+function drawSimPreview(ctx: CanvasRenderingContext2D, r: Rect, p: Preview, now: number): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, r.x, r.y, r.w, r.h, 12);
+  ctx.fill();
+  const n = p.runs.length;
+  const gap = 10;
+  const w = (r.w - 16 - gap * (n - 1)) / n;
+  p.runs.forEach((run, i) => {
+    const x = r.x + 8 + i * (w + gap);
+    const y = r.y + 8;
+    const h = r.h - 16;
+    // 上: その窓のルール(選択中の行)。足したカードは光らせる
+    const row = run.rules[p.row] ?? [];
+    const cardH = 40;
+    const cardW = cardH * (36 / 47);
+    const cg = 4;
+    const tot = row.length * cardW + Math.max(0, row.length - 1) * cg;
+    let cx = x + w / 2 - tot / 2;
+    if (row.length === 0) {
+      drawEmptySlot(ctx, x + w / 2 - cardW / 2, y, cardW, cardH);
+    }
+    row.forEach((c, k) => {
+      const isAdded = i === 1 && k === 0 && p.added === c;
+      if (isAdded) {
+        ctx.save();
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 10 + 6 * Math.sin(now / 200);
+      }
+      drawCard(ctx, c, cx, y, cardW, cardH, { active: isAdded });
+      if (isAdded) ctx.restore();
+      cx += cardW + cg;
+    });
+    // 真ん中: ビル
+    const by = y + cardH + 10;
+    const bh = h - cardH - 10 - 34;
+    drawMiniBuilding(ctx, x, by, w, bh, run.sim);
+    // 下: 運んだ人数 / 取りこぼし
+    const sy = y + h - 14;
+    iconCheck(ctx, x + w * 0.18, sy - 2, 9);
+    drawNumber(ctx, String(run.sim.stats.delivered - run.baseDelivered), x + w * 0.45, sy + 6, 20, T().text, 'right');
+    iconCross(ctx, x + w * 0.62, sy - 2, 9);
+    drawNumber(ctx, String(run.sim.stats.missed - run.baseMissed), x + w * 0.92, sy + 6, 20, T().text, 'right');
+  });
+  // 2つ並べるときは、間に「→」(今 → 足したら)
+  if (n === 2) {
+    const mx = r.x + 8 + w + gap / 2;
+    const my = r.y + 8 + 20;
+    ctx.fillStyle = T().text;
+    ctx.beginPath();
+    ctx.moveTo(mx + 5, my); ctx.lineTo(mx - 3, my - 6); ctx.lineTo(mx - 3, my + 6);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/** 小さなビル(試しに動かす窓用)。階の帯・待っている人(行き先の色の丸)・かご(エレベーターの色)・行き先の点線 */
+function drawMiniBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: SimState): void {
+  const floors = s.building.floors;
+  const fh = h / floors;
+  const ne = s.elevators.length;
+  const shaftW = Math.min(34, (w * 0.42) / ne);
+  const shaftX0 = x + w - ne * shaftW - 2;
+  const fy = (f: number): number => y + (floors - 1 - f) * fh;
+  for (let f = 0; f < floors; f++) {
+    ctx.fillStyle = f % 2 === 0 ? T().bandA : T().bandB;
+    ctx.fillRect(x, fy(f), w, fh - 1);
+    ctx.fillStyle = floorColor(f);
+    ctx.fillRect(x, fy(f), 3, fh - 1);
+  }
+  ctx.fillStyle = T().shaft;
+  ctx.fillRect(shaftX0, y, ne * shaftW, h);
+  // 待っている人: 先頭がシャフト側
+  const pr = Math.max(2.5, Math.min(5, fh * 0.16));
+  const byFloor: Passenger[][] = Array.from({ length: floors }, () => []);
+  for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
+  byFloor.forEach((q, f) => {
+    const step = Math.min(pr * 2.4, (shaftX0 - x - 8) / Math.max(1, q.length));
+    q.forEach((p, k) => fillCircle(ctx, shaftX0 - 4 - pr - k * step, fy(f) + fh - pr - 3, pr, floorColor(p.dest)));
+  });
+  // かご
+  s.elevators.forEach((e, i) => {
+    const sx = shaftX0 + i * shaftW;
+    const pos = e.pos / UNITS_PER_FLOOR;
+    const cy = y + (floors - 1 - pos) * fh + 1;
+    if (e.phase === 'moving') {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = elevatorColor(e.id);
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, sx + 2, fy(e.target) + 1, shaftW - 4, fh - 2, 3);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = T().carBody;
+    roundRect(ctx, sx + 2, cy, shaftW - 4, fh - 2, 3);
+    ctx.fill();
+    ctx.strokeStyle = elevatorColor(e.id);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 乗っている人(行き先の色の小さな丸)
+    const riders = s.passengers.filter((p) => p.state === 'riding' && p.elevatorId === e.id);
+    const rr = Math.max(1.8, Math.min(3, fh * 0.1));
+    riders.forEach((p, k) => {
+      const col = k % 3;
+      const rowi = Math.floor(k / 3);
+      fillCircle(ctx, sx + 2 + (shaftW - 4) * (col + 1) / 4, cy + fh - 4 - rr - rowi * (rr * 2 + 1), rr, floorColor(p.dest));
+    });
+  });
 }
 
 /** 大きな再生の窓: 選んだカードの場面を大きく見せる(何も選んでいなければ点線の枠) */

@@ -13,6 +13,7 @@ import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   fitRules, nextUnlock, placeCardAt, removeCard, slotCountFor, stagesOpen, type RuleSet,
 } from './ui/editor.ts';
+import { advancePreview, ensurePreview, type Preview } from './ui/preview.ts';
 import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
@@ -127,6 +128,9 @@ let editRow = 0;
 let held: { card: CardId; handIndex: number | null } | null = null;
 /** 編集画面: 大きく再生するカード */
 let previewCard: CardId | null = null;
+/** 編集画面の「試しに動かす」窓(本物のビルを今のルールで動かす。得点・保存には関係しない) */
+let simPreview: Preview | null = null;
+let previewAcc = 0;
 let newCards: CardId[] = [];
 /** 次の日に遊ぶステージ(1日の終わりに決めて保存する。結果画面の「やり直し」で移る) */
 let nextStageIdx = 0;
@@ -428,6 +432,20 @@ let acc = 0;
 let last = performance.now();
 
 function frame(now: number): void {
+  // 編集画面: 試しに動かす窓を進める(ルールや持ち上げたカードが変わったら作り直す)
+  if (mode === 'ready' && unlocked.length > 0) {
+    const st = stage();
+    const cfg = { building: st.building, traffic: st.traffic };
+    simPreview = ensurePreview(simPreview, cfg, st.seed, currentRules(), editRow, held?.card ?? null, slotCountFor(unlocked));
+    previewAcc += Math.min(now - last, 250);
+    while (previewAcc >= DT) {
+      advancePreview(simPreview, cfg, st.seed);
+      previewAcc -= DT;
+    }
+  } else {
+    simPreview = null;
+    previewAcc = 0;
+  }
   acc += Math.min(now - last, 250);
   last = now;
   if (mode !== 'playing') acc = 0;
@@ -484,7 +502,7 @@ function frame(now: number): void {
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentRules(), editRow, newCards,
     stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
-    held, previewCard: held?.card ?? previewCard, editorHint: mode === 'ready' ? editorHint() : null,
+    held, previewCard: held?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
