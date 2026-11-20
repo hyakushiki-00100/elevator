@@ -249,23 +249,25 @@ function drawQueues(ctx: CanvasRenderingContext2D, l: Layout, s: SimState): void
     if (q.length === 0) continue;
     let slots = 0;
     for (const p of q) slots += SLOT_WIDTH[p.kind];
-    const unit = Math.min(26, avail / slots);
+    // スマホでも見えるよう、階の高さに合わせて大きく描く(混雑したら詰める)
+    const unit = Math.min(l.floorH * 0.42, avail / slots);
+    const maxR = l.floorH * 0.15;
     const baseY = floorTop(l, f) + l.floorH - 2;
     let x = l.queueRight;
     for (const p of q) {
       const w = SLOT_WIDTH[p.kind] * unit;
       x -= w;
       const remain = Math.max(0, 1 - (s.tick - p.spawnTick) / p.patience);
-      drawPassenger(ctx, p, x + w / 2, baseY, unit, remain);
+      drawPassenger(ctx, p, x + w / 2, baseY, unit, remain, maxR);
     }
   }
 }
 
 /** 乗客1人。cx: 中心x、footY: 足元y、unit: 1人分の幅 */
 function drawPassenger(
-  ctx: CanvasRenderingContext2D, p: Passenger, cx: number, footY: number, unit: number, remain: number,
+  ctx: CanvasRenderingContext2D, p: Passenger, cx: number, footY: number, unit: number, remain: number, maxR = 9,
 ): void {
-  const r = Math.max(4, Math.min(9, unit * 0.36));
+  const r = Math.max(4, Math.min(maxR, unit * 0.38));
   const cy = footY - r - 5;
   const color = floorColor(p.dest);
   // 我慢が残り少ないと震える(残り25%以下)
@@ -294,7 +296,7 @@ function drawPassenger(
   ctx.beginPath();
   ctx.arc(x, cy, r + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remain);
   ctx.stroke();
-  drawNumber(ctx, String(p.dest + 1), x, cy - r - 8, 13, T().text);
+  drawNumber(ctx, String(p.dest + 1), x, cy - r - 7, Math.max(12, Math.round(r * 1.5)), T().text);
 }
 
 function drawElevator(
@@ -325,18 +327,18 @@ function drawElevator(
 
   // 乗客(1人分につき1つの丸。数字は先頭のみ)
   const riders = s.passengers.filter((p) => p.state === 'riding' && p.elevatorId === e.id);
-  const r = 6.5;
   const cols = 4;
   const pitch = (w - 14) / cols;
+  const r = Math.min(9, pitch * 0.42, (h - 30) / 4.6);
   let n = 0;
   for (const p of riders) {
     for (let k = 0; k < p.size; k++) {
       const col = n % cols;
       const row = Math.floor(n / cols);
       const cx = x + 7 + pitch * (col + 0.5);
-      const cy = y + h - 14 - row * (r * 2 + 6);
+      const cy = y + h - 7 - r - row * (r * 2 + 3);
       fillCircle(ctx, cx, cy, r, floorColor(p.dest));
-      if (k === 0) drawNumber(ctx, String(p.dest + 1), cx, cy + 4.5, 11, '#0b0d12');
+      if (k === 0) drawNumber(ctx, String(p.dest + 1), cx, cy + r * 0.45, Math.round(r * 1.35), '#0b0d12');
       n++;
     }
   }
@@ -469,49 +471,92 @@ function drawPanel(
     if (Math.floor(now / 400) % 2 === 0) iconPhase(ctx, -1, bx + bw + 4, by + 6, 10);
   }
 
-  // 数字の行: 運んだ / 取りこぼし / 平均待ち時間
-  const rowX = PANEL_X + 40;
-  const numX = PANEL_X + PANEL_W - 28;
-  let y = 140;
-  iconCheck(ctx, rowX, y, 13);
-  drawNumber(ctx, String(sc.delivered), numX, y + 9, 26, T().text, 'right');
-  y += 50;
-  iconCross(ctx, rowX, y, 13);
-  drawNumber(ctx, String(sc.missed), numX, y + 9, 26, T().text, 'right');
-  y += 50;
-  iconClock(ctx, rowX, y, 14);
-  drawNumber(ctx, sc.avgWaitSec.toFixed(1), numX, y + 9, 26, T().text, 'right');
+  // 数字の行: 運んだ / 取りこぼし / 平均待ち時間(横に3つ並べ、下のカードに場所を空ける)
+  const colW = PANEL_W / 3;
+  const statIcon = 110;
+  const statNum = 152;
+  const stats = [String(sc.delivered), String(sc.missed), sc.avgWaitSec.toFixed(1)];
+  stats.forEach((v, i) => {
+    const cx = PANEL_X + colW * (i + 0.5);
+    if (i === 0) iconCheck(ctx, cx, statIcon, 12);
+    else if (i === 1) iconCross(ctx, cx, statIcon, 12);
+    else iconClock(ctx, cx, statIcon, 13);
+    drawNumber(ctx, v, cx, statNum, 24, T().text);
+  });
 
   // 点数と星(閾値に届いた星が光る)
-  y += 70;
   ctx.fillStyle = T().floorLine;
-  ctx.fillRect(PANEL_X + 20, y - 34, PANEL_W - 40, 2);
+  ctx.fillRect(PANEL_X + 20, 168, PANEL_W - 40, 2);
   if (T().glow > 0) { ctx.shadowColor = T().accent; ctx.shadowBlur = T().glow; }
-  drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, y + 16, 40, T().accent);
+  drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, 214, 36, T().accent);
   ctx.shadowBlur = 0;
-  y += 56;
   for (let i = 0; i < 3; i++) {
-    iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 46, y, 17, sc.score >= th[i]!);
+    iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 40, 246, 15, sc.score >= th[i]!);
   }
 
-  // 運行ルールの枠(今動きを決めているカードを白枠で示す)。
-  // 星の下からパネルの下端までに、エレベーターの数だけ段を収める(段が多ければカードを縮める)
-  const rowsTop = 400;
-  const rowsBottom = LOGICAL_H - 16 - 8; // パネルの下端 − 白枠の分
-  const rowCount = s.elevators.filter((e) => e.rules.length > 0).length;
+  // 運行ルールの枠(今動きを決めているカードを枠で示し、切り替わった瞬間に1回だけ光らせる)。
+  // 星の下からパネルの下端までに、エレベーターの数だけ段を収める
+  const rowsTop = 274;
+  const rowsBottom = LOGICAL_H - 16 - 10;
+  const ruled = s.elevators.filter((e) => e.rules.length > 0);
+  const rowCount = ruled.length;
+  if (rowCount === 0) return;
   const gap = 8;
-  const ch = Math.min(47, rowCount > 0 ? (rowsBottom - rowsTop - (rowCount - 1) * gap) / rowCount : 47);
+  const multi = s.elevators.length > 1;
+  const headW = multi ? 30 : 0;
+  const maxCards = Math.max(...ruled.map((e) => e.rules.length));
+  const availW = PANEL_W - 24 - headW;
+  const cwByWidth = (availW - (maxCards - 1) * gap) / maxCards;
+  const chByHeight = (rowsBottom - rowsTop - (rowCount - 1) * gap) / rowCount;
+  const ch = Math.min(chByHeight, cwByWidth * (47 / 36), 150);
   const cw = ch * (36 / 47);
   let ry = rowsTop;
-  for (const e of s.elevators) {
-    if (e.rules.length === 0) continue;
+  for (const e of ruled) {
     const total = e.rules.length * cw + (e.rules.length - 1) * gap;
-    const x0 = PANEL_X + PANEL_W / 2 - total / 2;
+    const x0 = PANEL_X + headW + (PANEL_W - headW) / 2 - total / 2;
     e.rules.forEach((c, i) => drawCard(ctx, c, x0 + i * (cw + gap), ry, cw, ch, { active: e.ruleIndex === i }));
-    // 2基以上なら、行の左にエレベーターの番号
-    if (s.elevators.length > 1) drawNumber(ctx, String(e.id + 1), PANEL_X + 18, ry + ch / 2 + 6, 15, T().textDim);
+    // 切り替わった瞬間の光(エレベーターの色で、0.4秒で消える)
+    const f = ruleFlash(e.id, e.ruleIndex, e.target, now);
+    if (f > 0 && e.ruleIndex >= 0) {
+      const cx = x0 + e.ruleIndex * (cw + gap);
+      ctx.save();
+      ctx.globalAlpha = f;
+      ctx.shadowColor = elevatorColor(e.id);
+      ctx.shadowBlur = 24;
+      ctx.strokeStyle = elevatorColor(e.id);
+      ctx.lineWidth = 4 + 4 * f;
+      const grow = (1 - f) * 6;
+      roundRect(ctx, cx - grow, ry - grow, cw + grow * 2, ch + grow * 2, 8);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // 2基以上なら、行の左にそのエレベーターの色のかご(編集画面と同じ)
+    if (multi) drawCarIcon(ctx, PANEL_X + 10, ry + ch / 2 - 14, 20, 28, elevatorColor(e.id));
     ry += ch + gap;
   }
+}
+
+/**
+ * カードが新しい行き先を決めた時刻(描画だけの記録。sim には影響しない)。
+ * 「どの枠か」だけで判定すると、カードが1枚の行では1日に数回しか光らないため、
+ * 「どの枠か+行き先」が変わったときに光らせる(1基あたり約3秒に1回。2026-11-20 に sim で数えた)。
+ */
+const flashState: { key: string; at: number }[] = [];
+const FLASH_MS = 400;
+/** 光の強さ 1→0 */
+function ruleFlash(elevator: number, idx: number, target: number, now: number): number {
+  const key = `${idx}:${target}`;
+  const st = flashState[elevator];
+  if (!st) {
+    flashState[elevator] = { key, at: -Infinity };
+    return 0;
+  }
+  if (st.key !== key) {
+    st.key = key;
+    st.at = idx >= 0 ? now : -Infinity;
+  }
+  const u = (now - st.at) / FLASH_MS;
+  return u >= 0 && u < 1 ? 1 - u : 0;
 }
 
 function dim(ctx: CanvasRenderingContext2D): void {

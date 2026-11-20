@@ -25,7 +25,8 @@ export interface Layout {
 export function makeLayout(b: Building): Layout {
   const top = 20;
   const bottom = 20;
-  const shaftW = 72;
+  // スマホでも中の乗客が見えるよう、かごは広め(72 → 90。2026-11-20)
+  const shaftW = 90;
   const gap = 14;
   const n = b.elevators;
   const firstX = BUILDING_RIGHT - 12 - (n * shaftW + (n - 1) * gap);
