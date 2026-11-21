@@ -1,5 +1,5 @@
 import { UNITS_PER_FLOOR } from '../sim/building.ts';
-import { SAMPLE_WALK_TICKS } from '../sim/passenger.ts';
+import { WALK_TICKS } from '../sim/passenger.ts';
 import { STORY_LOOP_MS, storyAt } from './story.ts';
 import { BRANCH_FREEZE, type Branch, type Preview } from '../ui/preview.ts';
 import type { Elevator } from '../sim/elevator.ts';
@@ -115,8 +115,6 @@ export interface DrawArgs {
   bestStars: readonly number[];
   /** 進行状況を消す前の確かめの窓を出しているか */
   confirmReset: boolean;
-  /** 見本: 人のアイコンと、左のドアから歩いて登場する動き(a=見た目だけ / b=sim も待つ)。null は今までどおり */
-  walk: 'a' | 'b' | null;
   /** 1日目の最初の数回: 待っている人の階を指で示す */
   playHint: boolean;
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
@@ -140,8 +138,7 @@ export function draw(a: DrawArgs): void {
   const multi = s.elevators.length > 1;
   // 2基以上: 選んでいるエレベーターの通り道(シャフト)を、そのエレベーターの色で縦いっぱいに光らせる
   if (multi && a.selected !== null && a.mode === 'playing') drawSelectedShaft(ctx, l, a.selected, a.now);
-  if (a.walk) drawQueuesWalking(ctx, l, s, a.walk, a.now);
-  else drawQueues(ctx, l, s);
+  drawQueuesWalking(ctx, l, s, a.now);
   s.elevators.forEach((e, i) => {
     const prev = a.prevPos[i] ?? e.pos;
     const pos = prev + (e.pos - prev) * a.alpha;
@@ -262,35 +259,13 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
 /** 待ち行列。種類ごとに幅の違う「枠」を取り、先頭(id が小さい人)がシャフトに一番近い */
 const SLOT_WIDTH = { normal: 1, rushed: 1, group: 2.2, luggage: 1.6 } as const;
 
-function drawQueues(ctx: CanvasRenderingContext2D, l: Layout, s: SimState): void {
-  const byFloor: Passenger[][] = Array.from({ length: l.floors }, () => []);
-  for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
-  const avail = l.queueRight - l.queueLeft;
-  for (let f = 0; f < l.floors; f++) {
-    const q = byFloor[f]!;
-    if (q.length === 0) continue;
-    let slots = 0;
-    for (const p of q) slots += SLOT_WIDTH[p.kind];
-    // スマホでも見えるよう、階の高さに合わせて大きく描く(混雑したら詰める)
-    const unit = Math.min(l.floorH * 0.42, avail / slots);
-    const maxR = l.floorH * 0.15;
-    const baseY = floorTop(l, f) + l.floorH - 2;
-    let x = l.queueRight;
-    for (const p of q) {
-      const w = SLOT_WIDTH[p.kind] * unit;
-      x -= w;
-      const remain = Math.max(0, 1 - (s.tick - p.spawnTick) / p.patience);
-      drawPassenger(ctx, p, x + w / 2, baseY, unit, remain, maxR);
-    }
-  }
-}
 
 /**
  * 見本: 各階の左端にドアを描き、待っている人を「人の形」で描く。新しく来た人はドアから出て、行列の最後尾まで歩く。
  * a: 見た目だけ歩く(sim では現れた瞬間から待っている) / b: sim でも着くまで待つ(spawnTick が着く時刻)。
  */
-function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, mode: 'a' | 'b', now: number): void {
-  const W = SAMPLE_WALK_TICKS;
+function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number): void {
+  const W = WALK_TICKS;
   const byFloor: Passenger[][] = Array.from({ length: l.floors }, () => []);
   for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
   const doorX = 12;
@@ -302,7 +277,7 @@ function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState
     const q = byFloor[f]!;
     // 歩いている人の進み具合(0=ドア 1=行列)
     const progress = (p: Passenger): number => {
-      const t = mode === 'a' ? (s.tick - p.spawnTick) / W : 1 - (p.spawnTick - s.tick) / W;
+      const t = 1 - (p.spawnTick - s.tick) / W;
       return Math.max(0, Math.min(1, t));
     };
     // ドア: 誰かが出てきたばかりなら開いている
@@ -334,7 +309,7 @@ function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState
       const startX = doorX + doorW / 2;
       const px = startX + (slotX - startX) * t;
       const walking = t < 1;
-      const arrived = mode === 'a' ? s.tick - p.spawnTick : s.tick - p.spawnTick;
+      const arrived = s.tick - p.spawnTick;
       const remain = Math.max(0, 1 - Math.max(0, arrived) / p.patience);
       drawPerson(ctx, p, px, baseY, unit, walking ? 1 : remain, maxR, walking ? now : null);
     }
@@ -379,9 +354,30 @@ function drawPerson(
     }
     ctx.stroke();
   } else if (p.kind === 'luggage') {
-    one(cx - r * 0.45, 1, 0);
+    // 荷物持ち: 人の横に、伸ばした取っ手と車輪の付いた大きなスーツケース(2026-11-21「荷物のアイコンが分かりにくい」)
+    one(cx - r * 0.55, 1, 0);
+    const sw = r * 1.15;
+    const sh = r * 1.5;
+    const sx = cx + r * 0.25;
+    const sy = footY - 6 - sh - 2;
+    ctx.strokeStyle = '#e8d6b0';
+    ctx.lineWidth = Math.max(1.5, r * 0.14);
+    ctx.beginPath();
+    ctx.moveTo(sx + sw * 0.3, sy); ctx.lineTo(sx + sw * 0.3, sy - r * 0.7);
+    ctx.lineTo(sx + sw * 0.7, sy - r * 0.7); ctx.lineTo(sx + sw * 0.7, sy);
+    ctx.stroke();
     ctx.fillStyle = '#c9a26b';
-    ctx.fillRect(cx + r * 0.45, footY - 6 - r * 0.9, r * 0.9, r * 0.9);
+    roundRect(ctx, sx, sy, sw, sh, r * 0.2);
+    ctx.fill();
+    ctx.strokeStyle = '#6b4f2a';
+    ctx.lineWidth = Math.max(1, r * 0.1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx + sw * 0.15, sy + sh * 0.35); ctx.lineTo(sx + sw * 0.85, sy + sh * 0.35);
+    ctx.moveTo(sx + sw * 0.15, sy + sh * 0.65); ctx.lineTo(sx + sw * 0.85, sy + sh * 0.65);
+    ctx.stroke();
+    fillCircle(ctx, sx + sw * 0.25, sy + sh + 1.5, Math.max(1.5, r * 0.16), '#333');
+    fillCircle(ctx, sx + sw * 0.75, sy + sh + 1.5, Math.max(1.5, r * 0.16), '#333');
   } else {
     one(cx, 1, 0);
   }
@@ -397,41 +393,6 @@ function drawPerson(
   drawNumber(ctx, String(p.dest + 1), cx, headTop - 3, Math.max(12, Math.round(r * 1.5)), T().text);
 }
 
-/** 乗客1人。cx: 中心x、footY: 足元y、unit: 1人分の幅 */
-function drawPassenger(
-  ctx: CanvasRenderingContext2D, p: Passenger, cx: number, footY: number, unit: number, remain: number, maxR = 9,
-): void {
-  const r = Math.max(4, Math.min(maxR, unit * 0.38));
-  const cy = footY - r - 5;
-  const color = floorColor(p.dest);
-  // 我慢が残り少ないと震える(残り25%以下)
-  const shake = remain < 0.25 ? Math.sin(remain * 400) * 1.5 : 0;
-  const x = cx + shake;
-  if (p.kind === 'group') {
-    for (const dx of [-r * 1.25, 0, r * 1.25]) fillCircle(ctx, x + dx, cy + (dx === 0 ? -2 : 0), r * 0.85, color);
-  } else if (p.kind === 'luggage') {
-    fillCircle(ctx, x - r * 0.5, cy, r, color);
-    ctx.fillStyle = '#c9a26b';
-    ctx.fillRect(x + r * 0.6, cy - r * 0.2, r * 1.3, r * 1.2);
-  } else if (p.kind === 'rushed') {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, cy - r * 1.2);
-    ctx.lineTo(x + r * 1.15, cy + r * 0.85);
-    ctx.lineTo(x - r * 1.15, cy + r * 0.85);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    fillCircle(ctx, x, cy, r, color);
-  }
-  // 我慢の残り: リングが減り、緑→赤に変わる
-  ctx.strokeStyle = `hsl(${(120 * remain).toFixed(0)} 85% 55%)`;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.arc(x, cy, r + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remain);
-  ctx.stroke();
-  drawNumber(ctx, String(p.dest + 1), x, cy - r - 7, Math.max(12, Math.round(r * 1.5)), T().text);
-}
 
 function drawElevator(
   ctx: CanvasRenderingContext2D, l: Layout, s: SimState, e: Elevator, pos: number, selected: boolean,
@@ -840,7 +801,7 @@ function drawStoryboard(ctx: CanvasRenderingContext2D, r: Rect, now: number): vo
 function drawPlayHint(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number): void {
   let best: Passenger | null = null;
   for (const p of s.passengers) {
-    if (p.state === 'waiting' && (best === null || p.spawnTick < best.spawnTick)) best = p;
+    if (p.state === 'waiting' && p.spawnTick <= s.tick && (best === null || p.spawnTick < best.spawnTick)) best = p;
   }
   if (!best) return;
   const phase = (now % 1200) / 1200;
@@ -1206,7 +1167,8 @@ function drawMiniBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w
   // 待っている人: 先頭がシャフト側
   const pr = Math.max(2.5, Math.min(5, fh * 0.16));
   const byFloor: Passenger[][] = Array.from({ length: floors }, () => []);
-  for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
+  // 歩いている途中の人(まだ行列に着いていない)は描かない
+  for (const p of s.passengers) if (p.state === 'waiting' && p.spawnTick <= s.tick) byFloor[p.origin]!.push(p);
   byFloor.forEach((q, f) => {
     const step = Math.min(pr * 2.4, (shaftX0 - x - 8) / Math.max(1, q.length));
     q.forEach((p, k) => fillCircle(ctx, shaftX0 - 4 - pr - k * step, fy(f) + fh - pr - 3, pr, floorColor(p.dest)));

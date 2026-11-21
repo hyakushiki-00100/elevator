@@ -38,9 +38,11 @@ export interface Passenger {
   waitTicks: number;
 }
 
-/** 見本: 左端のドアから行列まで歩く長さ(tick)。案A(見た目だけ)と案B(sim も待つ)で同じ値を使う */
-// 1.2秒(36)は「急かされている感じが強い」(2026-11-20 ユーザーの感想)ため 2.5秒に延ばした
-export const SAMPLE_WALK_TICKS = 75;
+/**
+ * 乗客が左端のドアから行列まで歩く長さ(tick)。着くまでは呼び出しにならず、乗れず、我慢も数えない(案B、2026-11-21 ユーザー決定)。
+ * 1.2秒は「急かされている感じが強い」、2.5秒の見本を見て「2秒で」(ユーザー決定)。
+ */
+export const WALK_TICKS = 60;
 
 export interface Stats {
   spawned: number;

@@ -1,6 +1,6 @@
 import type { Building } from './building.ts';
 import { createElevator, stepElevator, type Elevator, type SimEvent } from './elevator.ts';
-import { makePassenger, type Kind, type Passenger, type Stats } from './passenger.ts';
+import { makePassenger, WALK_TICKS, type Kind, type Passenger, type Stats } from './passenger.ts';
 import { Rng } from './rng.ts';
 import { CARD_ORDER, isCardId, type CardId } from './rules.ts';
 import { dayTicks, maybeSpawn, phaseAt, validatePlan, type DayPlan } from './traffic.ts';
@@ -11,8 +11,8 @@ export interface SimConfig {
   /** エレベーターごとのルールの枠(上から順に評価)。省略すると全基が手動のみ */
   rules?: readonly (readonly CardId[])[];
   /**
-   * 見本(案B、2026-11-20、まだ本採用ではない): 乗客が左端のドアから歩いて行列に着くまでの tick。
-   * 着くまでは呼び出しにならず、乗れず、我慢の時間も数えない(spawnTick を着く時刻にずらす)。省略・0 なら今までどおり。
+   * 乗客が左端のドアから歩いて行列に着くまでの tick(省略すると WALK_TICKS)。
+   * 着くまでは呼び出しにならず、乗れず、我慢の時間も数えない(spawnTick を着く時刻にずらす)。0 なら現れた瞬間から待つ。
    */
   walkTicks?: number;
 }
@@ -114,7 +114,7 @@ export function step(s: SimState, commands: readonly Command[] = []): void {
     const ph = s.config.traffic.phases[s.phaseIndex]!;
     const p = maybeSpawn(ph, at.offset, s.rng, s.config.building, s.tick, s.nextId);
     if (p) {
-      if (s.config.walkTicks) p.spawnTick = s.tick + s.config.walkTicks;
+      p.spawnTick = s.tick + (s.config.walkTicks ?? WALK_TICKS);
       s.nextId++;
       s.passengers.push(p);
       s.stats.spawned++;

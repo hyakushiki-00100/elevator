@@ -13,7 +13,6 @@ import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   compactLayout, dropFromHand, fitLayout, moveSlot, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
 } from './ui/editor.ts';
-import { SAMPLE_WALK_TICKS } from './sim/passenger.ts';
 import { advancePreview, ensurePreview, previewRuleSets, type Preview } from './ui/preview.ts';
 import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
@@ -146,13 +145,10 @@ let drag: Drag | null = null;
 /** これだけ動いたら「引っ張り」と見なす(論理座標。スマホで触れただけのずれを引っ張りと誤解しないため) */
 const DRAG_THRESHOLD = 10;
 /**
- * 見本(2026-11-20、まだ本採用ではない): 人のアイコンと、左のドアから歩いて登場する動き。
- * 見本のページが window.__WALK に 'a'(見た目だけ歩く)か 'b'(sim でも着くまで待つ)を入れて読み込む。通常は null。
+ * 見本のページだけが window.__SAMPLE_KINDS を true にする: 急ぎ・団体・荷物持ちも出す
+ * (どのステージも出現率がまだ0で、絵を確かめられないため。見本の日は点の扱いも見本)。
  */
-const WALK: 'a' | 'b' | null = (() => {
-  const v = (globalThis as { __WALK?: unknown }).__WALK;
-  return v === 'a' || v === 'b' ? v : null;
-})();
+const SAMPLE_KINDS = (globalThis as { __SAMPLE_KINDS?: unknown }).__SAMPLE_KINDS === true;
 /** 編集画面: 大きく再生するカード */
 let previewCard: CardId | null = null;
 /** 編集画面の「試しに動かす」窓(本物のビルを今のルールで動かす。得点・保存には関係しない) */
@@ -178,10 +174,10 @@ function newDay(): void {
   rulesByStage[stageIdx] = currentLayout();
   // ステージごとに固定のシード(同じルール・同じ操作なら同じ結果になる)
   // 見本では、急ぎ・団体・荷物持ちも出す(どのステージも出現率がまだ0で、絵を確かめられないため)
-  const traffic = WALK
+  const traffic = SAMPLE_KINDS
     ? { ...st.traffic, phases: st.traffic.phases.map((p) => ({ ...p, rushedShare: 0.1, groupShare: 0.08, luggageShare: 0.08 })) }
     : st.traffic;
-  state = createSim({ building: st.building, traffic, rules: currentRules(), walkTicks: WALK === 'b' ? SAMPLE_WALK_TICKS : 0 }, st.seed);
+  state = createSim({ building: st.building, traffic, rules: currentRules() }, st.seed);
   layout = makeLayout(st.building);
   control = { selected: st.building.elevators === 1 ? 0 : null };
   pending = [];
@@ -574,7 +570,6 @@ function frame(now: number): void {
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
     confirmReset: mode === 'ready' && confirmReset,
-    walk: WALK,
   });
   if (px > 1) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
