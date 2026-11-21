@@ -587,6 +587,7 @@ function frame(now: number): void {
     drag: drag && drag.moved ? { card: drag.card, x: drag.x, y: drag.y, from: drag.from, target: dropTarget(drag) } : null,
     previewCard: drag?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
+    look: stage().look,
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
     confirmReset: mode === 'ready' && confirmReset,

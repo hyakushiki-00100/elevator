@@ -8,7 +8,7 @@ describe('カードの絵の場面', () => {
     for (const c of CARD_ORDER) {
       const sc = SCENES[c];
       expect(sc, c).toBeDefined();
-      for (const f of [sc.from, sc.to, ...sc.calls.map((x) => x.floor)]) {
+      for (const f of [sc.from, sc.to, ...sc.calls.map((x) => x.floor), ...(sc.rider !== undefined ? [sc.rider] : [])]) {
         expect(f).toBeGreaterThanOrEqual(0);
         expect(f).toBeLessThanOrEqual(4);
       }
@@ -23,7 +23,7 @@ describe('カードの絵の場面', () => {
       const hall = [0, 1, 2, 3, 4].map((f) => sc.calls.some((x) => x.floor === f) && servesFloor(rules, f, 5));
       const ctx: RuleContext = {
         cur: sc.from, floors: 5, heading: sc.heading === 0 ? 1 : sc.heading, hall,
-        car: [false, false, false, false, false], includeCur: false,
+        car: [0, 1, 2, 3, 4].map((f) => sc.rider === f), includeCur: false,
       };
       let target: number | null = null;
       for (const r of rules) { target = CARDS[r](ctx); if (target !== null) break; }

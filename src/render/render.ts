@@ -115,6 +115,8 @@ export interface DrawArgs {
   bestStars: readonly number[];
   /** 進行状況を消す前の確かめの窓を出しているか */
   confirmReset: boolean;
+  /** 建物の見た目(ステージごと) */
+  look: 'plain' | 'office' | 'department' | 'hotel';
   /** 1日の終わりの広告を待っている(結果画面の上に回る輪を出し、操作を止める) */
   adBusy: boolean;
   /** 1日目の最初の数回: 待っている人の階を指で示す */
@@ -136,7 +138,7 @@ export function draw(a: DrawArgs): void {
   ctx.fillStyle = T().bg;
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
 
-  drawBuilding(ctx, l, s, a.now);
+  drawBuilding(ctx, l, s, a.now, a.look);
   const multi = s.elevators.length > 1;
   // 2基以上: 選んでいるエレベーターの通り道(シャフト)を、そのエレベーターの色で縦いっぱいに光らせる
   if (multi && a.selected !== null && a.mode === 'playing') drawSelectedShaft(ctx, l, a.selected, a.now);
@@ -147,7 +149,7 @@ export function draw(a: DrawArgs): void {
     // 選んでいないかごは少し暗く(選んでいるかごを目立たせる)
     const dimmed = multi && a.selected !== null && a.selected !== i && a.mode === 'playing';
     if (dimmed) ctx.globalAlpha = 0.55;
-    drawElevator(ctx, l, s, e, pos, a.selected === i, a.now, multi && a.selected === null && a.mode === 'playing');
+    drawElevator(ctx, l, s, e, pos, a.selected === i, a.now, multi && a.selected === null && a.mode === 'playing', a.look);
     ctx.globalAlpha = 1;
   });
   drawEffects(ctx, l, a.effects, a.now);
@@ -232,7 +234,7 @@ function drawRotateHint(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   ctx.restore();
 }
 
-function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number): void {
+function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number, look: DrawArgs['look'] = 'plain'): void {
   const waitingAt = new Set<number>();
   for (const p of s.passengers) if (p.state === 'waiting') waitingAt.add(p.origin);
   const targets = new Set<number>();
@@ -250,6 +252,8 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
     if (T().glow > 0) { ctx.shadowColor = numColor; ctx.shadowBlur = T().glow; }
     drawNumber(ctx, String(f + 1), 26, y + l.floorH - 14, 18, numColor);
     ctx.shadowBlur = 0;
+    // 建物の種類ごとの飾り(人や数字より先に、薄く描く)
+    drawFloorDecor(ctx, l, f, y, look);
     // 床の線
     ctx.fillStyle = T().floorLine;
     ctx.fillRect(8, y + l.floorH - 2, BUILDING_RIGHT - 8, 2);
@@ -266,7 +270,64 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
   for (const x of l.shaftX) {
     ctx.fillStyle = T().shaft;
     ctx.fillRect(x, l.top, l.shaftW, l.floors * l.floorH);
+    // 昇降路のレール(両側の細い線)と、各階の乗り場の枠
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(x + 3, l.top, 2, l.floors * l.floorH);
+    ctx.fillRect(x + l.shaftW - 5, l.top, 2, l.floors * l.floorH);
+    for (let f = 0; f < l.floors; f++) {
+      const y = floorTop(l, f);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 2, l.shaftW - 2, l.floorH - 4);
+    }
   }
+}
+
+/** 建物の種類ごとの、各階の薄い飾り(ドアと行列の後ろ。文字は使わない) */
+function drawFloorDecor(ctx: CanvasRenderingContext2D, l: Layout, f: number, y: number, look: DrawArgs['look']): void {
+  if (look === 'plain') return;
+  const x0 = 60;
+  const x1 = l.queueRight - 10;
+  const h = l.floorH;
+  ctx.save();
+  if (look === 'office') {
+    // オフィス: 横長の窓が並ぶ
+    ctx.fillStyle = 'rgba(140,190,255,0.07)';
+    const ww = 46;
+    for (let x = x0; x + ww <= x1; x += ww + 14) ctx.fillRect(x, y + h * 0.18, ww, h * 0.32);
+  } else if (look === 'department') {
+    // デパート: 各階の上に日よけ(山形の縁)。1階は入口を広く明るく
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(x0, y + 4, x1 - x0, h * 0.12);
+    const sw = 20;
+    ctx.beginPath();
+    for (let x = x0; x + sw <= x1; x += sw) {
+      ctx.moveTo(x, y + 4 + h * 0.12);
+      ctx.lineTo(x + sw / 2, y + 4 + h * 0.12 + sw * 0.4);
+      ctx.lineTo(x + sw, y + 4 + h * 0.12);
+    }
+    ctx.fill();
+    if (f === 0) {
+      ctx.fillStyle = 'rgba(255,220,140,0.06)';
+      ctx.fillRect(x0, y + h * 0.3, x1 - x0, h * 0.65);
+    }
+  } else if (look === 'hotel') {
+    // ホテル: 客室のドアが並び、床にじゅうたん。1階はロビー(ドアなし)
+    if (f > 0) {
+      const dw = 22;
+      const dh = Math.min(h * 0.62, 46);
+      for (let x = x0 + 10; x + dw <= x1; x += dw + 44) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y + h - 4 - dh, dw, dh);
+        ctx.fillStyle = 'rgba(255,215,120,0.12)';
+        ctx.fillRect(x + dw - 6, y + h - 4 - dh * 0.5, 3, 3);
+      }
+    }
+    ctx.fillStyle = 'rgba(170,40,50,0.12)';
+    ctx.fillRect(x0 - 10, y + h - 7, x1 - x0 + 20, 5);
+  }
+  ctx.restore();
 }
 
 /** 待ち行列。種類ごとに幅の違う「枠」を取り、先頭(id が小さい人)がシャフトに一番近い */
@@ -409,7 +470,7 @@ function drawPerson(
 
 function drawElevator(
   ctx: CanvasRenderingContext2D, l: Layout, s: SimState, e: Elevator, pos: number, selected: boolean,
-  now = 0, invite = false,
+  now = 0, invite = false, look: DrawArgs['look'] = 'plain',
 ): void {
   const x = l.shaftX[e.id]!;
   const y = carTop(l, pos);
@@ -429,6 +490,10 @@ function drawElevator(
     ctx.restore();
   }
 
+  // ロープ(かごの上から昇降路の上端まで)
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(x + w / 2 - 1, l.top, 2, Math.max(0, y - l.top - 18));
+
   ctx.fillStyle = T().metal ? metalGradient(ctx, x, y, w, h, T().carBody) : T().carBody;
   roundRect(ctx, x + 1, y, w - 2, h, 6);
   ctx.fill();
@@ -440,6 +505,32 @@ function drawElevator(
   ctx.fillStyle = T().carInner;
   roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 4);
   ctx.fill();
+  // 建物の種類ごとのかごの仕上げ(縁の色=エレベーターの色は変えない)
+  if (look === 'hotel') {
+    // ホテル: 金色の内枠と、天井の照明
+    ctx.strokeStyle = '#c9a24a';
+    ctx.lineWidth = 2;
+    roundRect(ctx, x + 7, y + 7, w - 14, h - 14, 3);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,220,150,0.35)';
+    ctx.fillRect(x + w / 2 - 12, y + 7, 24, 2);
+  } else if (look === 'department') {
+    // デパート: ガラス張り(斜めの光)
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 4);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.15, y + h); ctx.lineTo(x + w * 0.45, y); ctx.lineTo(x + w * 0.62, y); ctx.lineTo(x + w * 0.32, y + h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  } else if (look === 'office') {
+    // オフィス: ステンレスの横じま
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let k = y + 24; k < y + h - 8; k += 8) ctx.fillRect(x + 6, k, w - 12, 1);
+  }
   if (selected && s.elevators.length > 1) {
     // 選んでいるかご: 白い太い縁と、そのエレベーターの色の光(ゆっくり脈打つ)
     ctx.save();
@@ -498,20 +589,32 @@ function drawElevator(
   ctx.fillStyle = T().door;
   ctx.fillRect(x + 5, y + 20, half * (1 - open), h - 25);
   ctx.fillRect(x + 5 + half + half * open, y + 20, half * (1 - open), h - 25);
-
-  // 進行方向の矢印
-  if (e.dir !== 0) {
-    ctx.fillStyle = T().text;
-    ctx.beginPath();
-    const cx = x + w / 2;
-    if (e.dir === 1) {
-      ctx.moveTo(cx, y - 8); ctx.lineTo(cx + 7, y - 1); ctx.lineTo(cx - 7, y - 1);
-    } else {
-      ctx.moveTo(cx, y + h + 8); ctx.lineTo(cx + 7, y + h + 1); ctx.lineTo(cx - 7, y + h + 1);
-    }
-    ctx.closePath();
-    ctx.fill();
+  // 扉の合わせ目(閉まっているとき)
+  if (open < 0.05) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + w / 2 - 1, y + 20, 2, h - 25);
   }
+
+  // かごの上の階数表示(本物の階数表示のように、進む向きの三角と今の階の数字)
+  const iw = 40;
+  const ih = 17;
+  const ix = x + w / 2 - iw / 2;
+  const iy = y - ih - 1;
+  ctx.fillStyle = '#050505';
+  roundRect(ctx, ix, iy, iw, ih, 3);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const tri = ix + 10;
+  const ty = iy + ih / 2;
+  ctx.fillStyle = e.dir !== 0 ? T().accent : 'rgba(255,255,255,0.12)';
+  ctx.beginPath();
+  if (e.dir >= 0) { ctx.moveTo(tri, ty - 5); ctx.lineTo(tri + 5, ty + 3); ctx.lineTo(tri - 5, ty + 3); }
+  else { ctx.moveTo(tri, ty + 5); ctx.lineTo(tri + 5, ty - 3); ctx.lineTo(tri - 5, ty - 3); }
+  ctx.closePath();
+  ctx.fill();
+  drawNumber(ctx, String(Math.round(pos / UNITS_PER_FLOOR) + 1), ix + 28, iy + ih - 2, 14, T().accent);
 }
 
 /** 選んでいるエレベーターのシャフトを、その色で縦いっぱいに塗り、両側に線を引く */

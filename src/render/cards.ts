@@ -23,6 +23,8 @@ export interface CardScene {
   heading: -1 | 0 | 1;
   /** 待っている人: picked = このカードで迎えに行く人 / それ以外は選ばれない(通り過ぎる・無視する)人 */
   calls: { floor: number; picked: boolean }[];
+  /** かごに乗っている人の行き先(その階の左に「降りる」印の輪を出す)。いなければ省略 */
+  rider?: number;
   /** 担当範囲のカード: 明るくする階 */
   lit?: number[];
   /** 急行: 1階の床を太く描く */
@@ -30,10 +32,11 @@ export interface CardScene {
 }
 
 export const SCENES: Record<CardId, CardScene> = {
-  // 3階のかご。上(4階)と下(1階)に待つ人 → 近いほう(4階)へ
-  nearest: { from: 2, to: 3, heading: 0, calls: [{ floor: 3, picked: true }, { floor: 0, picked: false }] },
-  // 同じ配置で、下へ向かっている → 近い4階ではなく、進行方向の先(1階)へ
-  sameDir: { from: 2, to: 0, heading: -1, calls: [{ floor: 3, picked: false }, { floor: 0, picked: true }] },
+  // 3階のかごに、2階で降りる人が乗っている。5階に待つ人 → 近いほう(2階)へ降ろしに行く
+  // (「近い」は待っている人の階だけでなく、降りる人の階も行き先にする。2026-11-21 絵に描き足した)
+  nearest: { from: 2, to: 1, heading: 0, rider: 1, calls: [{ floor: 4, picked: false }] },
+  // 同じ配置で、上へ向かっている → 後ろ(2階)の降りる人より、進行方向の先(5階)の待つ人へ
+  sameDir: { from: 2, to: 4, heading: 1, rider: 1, calls: [{ floor: 4, picked: true }] },
   // 空のかごが最上階から、途中(3階)の待つ人を通り過ぎて1階へ
   express: { from: 4, to: 0, heading: 0, calls: [{ floor: 2, picked: false }], ground: true },
   // 下層担当: 1〜3階だけ明るい。5階の呼び出しは無視して、2階の人へ
@@ -150,6 +153,16 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
     ctx.setLineDash([]);
   }
 
+  // 乗っている人の行き先: シャフトの右に白い輪(「ここで降りる」)。降ろしたら消える
+  const dropped = sc.rider !== undefined && sc.rider === sc.to && st.pickedGone;
+  if (sc.rider !== undefined && !dropped) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.2, 1.4 * s);
+    ctx.beginPath();
+    ctx.arc(shaftX + shaftW + 9 * s, floorMid(sc.rider), 3.6 * s, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   // かご(白い枠)。最初から向いている方向があれば三角で示す
   const carY = floorMid(st.pos);
   const ch = fh * 0.82, cw = shaftW - 3 * s;
@@ -158,6 +171,13 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
   ctx.fill();
   ctx.fillStyle = CARD_COLORS[card];
   ctx.fillRect(shaftX + 3.5 * s, carY - ch / 2 + 2 * s, cw - 4 * s, ch - 4 * s);
+  // 乗っている人(かごの中の白い点)
+  if (sc.rider !== undefined && !dropped) {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(shaftX + shaftW / 2, carY, 2.6 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
   const heading = sc.heading !== 0 ? sc.heading : (st.pos === sc.to ? 0 : dirDown ? -1 : 1);
   if (heading !== 0 && !st.pickedGone) {
     const mx = shaftX + shaftW / 2;

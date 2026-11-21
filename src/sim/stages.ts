@@ -14,6 +14,11 @@ export interface Stage {
   stars: [number, number, number];
   /** 持っているカードがこの枚数以上になると開く(配列は opensAt の小さい順に並べる) */
   opensAt: number;
+  /**
+   * 建物の見た目(描画だけに使う。sim には関係しない)。人の流れの特徴と合わせ、文字なしでステージの性格を伝える
+   * (2026-11-21):plain=小さなビル / office=オフィス(朝夕のラッシュ)/ department=デパート(1日中、1階から上へ)/ hotel=ホテル(上の階どうし・下の階どうし)
+   */
+  look: 'plain' | 'office' | 'department' | 'hotel';
 }
 
 /** 1分 = 1800tick */
@@ -47,6 +52,7 @@ export const STAGES: readonly Stage[] = [
     // 3★: 「同じ方向を優先」を「近い呼び出しへ」の上に置く考え方が必要
     stars: [2800, 5400, 6650],
     opensAt: 0,
+    look: 'plain',
   },
   {
     id: 2,
@@ -69,6 +75,7 @@ export const STAGES: readonly Stage[] = [
     //   カード 両方[近い] 7542 / 両方[同方向,近い] 7514 / ゾーン+[近い] 7549 / 両方[急行,近い] 7230
     stars: [3000, 5600, 7450],
     opensAt: 2,
+    look: 'office',
   },
   {
     id: 3,
@@ -92,6 +99,7 @@ export const STAGES: readonly Stage[] = [
     // 3★: 「空なら急行で1階へ」を「近い呼び出しへ」の上に置く考え方が必要
     stars: [1700, 3300, 4100],
     opensAt: 3,
+    look: 'department',
   },
   {
     id: 4,
@@ -112,5 +120,6 @@ export const STAGES: readonly Stage[] = [
     // 3★: 担当範囲のカードで、下層と上層に分ける考え方が必要
     stars: [5000, 9300, 11200],
     opensAt: 5,
+    look: 'hotel',
   },
 ];
