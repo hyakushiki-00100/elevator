@@ -59,6 +59,8 @@
 | SimTower:エレベーター交通を模擬するプログラムを元に作られ、効率的なエレベーター運用がゲームの中核 | Giant Bomb |
 | Project Highrise(SimTowerの精神的後継作):エレベーターの待ち時間や管理の仕組みがないことが、プレイヤーの不満として挙がっている | Vaporlens |
 | CrazyGames・Pokiでは、運行管理型のエレベーターゲームは見つからなかった | 検索結果(**未確認**:サイト内を全件確認したわけではない) |
+| **Elevator Protocol**(itch.io、nangchang、プレビュー版、Windows・macOS のダウンロード版):エレベーターの運行を扱うローグライクのデッキ構築。自分でかごを動かすのではなく「運行の方針」を置く。決定的(同じ条件なら同じ結果)なシミュレーションで、建物は3種類、5日間の挑戦、毎日の挑戦がある。**本作の「ルールのカードで自動化」にかなり近い**(2026-11-21 名前の検索中に発見) | itch.io のページ(検索結果の要約。ページ本文は未読) |
+| Lift Attendant(Steam):エレベーターを動かして乗客を運び、お金で強化する、ミニマルなパズル | 検索結果の要約 |
 | CrazyGames:Basic Launchの段階では、ごく一部のプレイヤーに公開されて実際の反応が測られる。SDKは任意で、収益化はできない。正式公開(Full Launch)では外部広告禁止、広告はSDK経由のみ | CrazyGames公式ドキュメント |
 | Webゲームの収益は一部に極端に偏っていて、中央値はほぼゼロ | Cinevva |
 
@@ -444,6 +446,7 @@ out/              ← スクリーンショットとbalance.csv(gitに入れな�
 ---
 
 ## 出典
+- Elevator Protocol(itch.io): https://nangchang.itch.io/elevator-protocol
 - Going Up(App Store): https://apps.apple.com/nr/app/going-up/id6476860253
 - Sky Lobby(App Store): https://apps.apple.com/us/app/id6763303024
 - Elevator Saga ドキュメント: https://cdn.jsdelivr.net/gh/magwo/elevatorsaga@master/documentation.html
