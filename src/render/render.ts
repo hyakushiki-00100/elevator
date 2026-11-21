@@ -115,6 +115,8 @@ export interface DrawArgs {
   bestStars: readonly number[];
   /** 進行状況を消す前の確かめの窓を出しているか */
   confirmReset: boolean;
+  /** 1日の終わりの広告を待っている(結果画面の上に回る輪を出し、操作を止める) */
+  adBusy: boolean;
   /** 1日目の最初の数回: 待っている人の階を指で示す */
   playHint: boolean;
   /** performance.now() 相当(点滅などの演出用。simには影響しない) */
@@ -158,6 +160,17 @@ export function draw(a: DrawArgs): void {
     if (a.confirmReset) drawResetConfirm(ctx);
   }
   if (a.mode === 'result' && a.result) drawResult(ctx, a.score, a.result, a.now - a.modeSince, a.newCards);
+  if (a.adBusy) {
+    // 広告を待っている間: 画面を暗くし、回る輪を出す(押しても進まないことを見せる)
+    dim(ctx);
+    ctx.strokeStyle = T().text;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const a0 = (a.now / 160) % (Math.PI * 2);
+    ctx.arc(LOGICAL_W / 2, LOGICAL_H / 2, 28, a0, a0 + Math.PI * 1.4);
+    ctx.stroke();
+  }
   // 消音ボタン(どの画面でも一番上に)
   const mb = MUTE_BUTTON;
   ctx.fillStyle = T().button;

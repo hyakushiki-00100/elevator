@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:crazygames": "tsc && vite build --mode crazygames --outDir dist-crazygames",
     "preview": "vite preview",
     "test": "vitest run",
     "calibrate": "node tools/calibrate.ts",

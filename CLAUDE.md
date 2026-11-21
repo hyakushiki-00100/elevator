@@ -1,6 +1,6 @@
 # エレベーター運行ゲーム(仮称)— 開発用指示書
 
-最終更新: 2026-11-20(claude.ai のチャットでの企画検討をまとめたもの)
+最終更新: 2026-11-21(claude.ai のチャットでの企画検討をまとめたもの)
 
 > このファイルは、エレベーターのゲームを開発するフォルダの直下に `CLAUDE.md` として置く。Claude Code は起動時にこれを読み込む。
 > 「推測」「未確認」と書いた箇所は検証されていない。それ以外は、第3章の出典で確認済み、またはユーザーが決めたこと。
@@ -282,6 +282,21 @@ out/              ← スクリーンショットとbalance.csv(gitに入れな�
 - 報酬型広告の例:「ラッシュアワーの間だけ速度2倍」「ルールの枠を一時的に1つ追加」。
 - ステージ間広告は、1日の終わりの採点画面にだけ入れる(プレイ中には出さない)。
 - **広告が出なくても、ゲームの進行に支障が出ないようにする。**
+
+**実装(2026-11-21、13日目、`platform/ads.ts`)**
+- 窓口 `Platform`:`init` / `gameplayStart` / `gameplayStop` / `midgame(hooks)` / `forcedMute` / `onSettingsChange`。ゲーム本体はこれだけを呼ぶ。
+- 公開先はビルド時に選ぶ:`npm run build`(広告なし。itch.io・自分のサイト)/ `npm run build:crazygames`(`.env.crazygames` の `VITE_PLATFORM=crazygames`、出力は `dist-crazygames/`)。比較を main.ts に直接書いているので、広告なしの版には CrazyGames の SDK の読み込みが入らない(ビルドの中身で確認)。
+- CrazyGames の SDK の呼び方は公式の説明で確認(docs.crazygames.com の sdk/intro・sdk/video-ads・sdk/game・requirements/intro・requirements/ads、2026-11-21):
+  - `https://sdk.crazygames.com/crazygames-sdk-v3.js` を読み込み、`await window.CrazyGames.SDK.init()`。説明では index.html の head で読み込む形だが、ここでは init の中で動的に読み込んでいる(読み込めなければ広告なしとして続ける)。**この違いで問題がないかは未確認**(CrazyGames の確認ツールで要確認)。
+  - 1日の終わり(結果画面を出したとき)に `ad.requestAd('midgame', { adStarted, adFinished, adError })`。広告が始まったら音を止め(`sound.setHidden(true)`)、終わる・失敗したら戻す。リクエストから終わるまでは結果画面の操作を止め、回る輪を出す。頻度は SDK 側が調整する(3分に1回まで。早すぎる要求は無視される)。
+  - Basic Launch の間は広告が無効(`adError` の `adsDisabled`)。そのときもゲームが止まらないことは偽の SDK のテストで確認(`tests/ads.test.ts`)。
+  - `game.gameplayStart()` は1日が始まったとき、`gameplayStop()` はそれ以外の画面に移ったとき。
+  - `game.settings.muteAudio` が true なら、ゲーム内の音の設定より優先して鳴らさない。
+  - 報酬型広告はまだ使わない:ご褒美の中身が未定で、効果のないボタンは審査で不可。また、点数が変わるご褒美(速度2倍など)は、共有した文字列で点数を再現する仕組みと衝突する(要検討)。
+- 本番のSDKを読み込んでの動作(実際の広告の表示)は、この環境では確かめられない(sdk.crazygames.com に接続できない)。読み込めないときに広告なしとして動き、1日を始められることは実ブラウザで確認した。
+- **CrazyGames の正式公開(Full Launch)の要件で、まだ満たしていないもの**(requirements/intro より):「最初からすぐに遊べる(Land directly in gameplay)」(今は最初の画面で開始ボタンを押す)/進行状況を CrazyGames のアカウントに結びつける(今は端末内だけ)。Basic Launch では SDK は任意で、これらは不要。
+
+**容量(2026-11-21)**:本番のビルドは JavaScript 約69KB(gzip で約25KB)+ index.html 1KB 未満。CrazyGames の最初の読み込みの上限 50MB に対して十分小さい。
 
 ---
 

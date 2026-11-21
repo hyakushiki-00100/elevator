@@ -13,6 +13,7 @@ import { handleTap, type ControlState } from './ui/controls.ts';
 import {
   compactLayout, dropFromHand, fitLayout, moveSlot, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
 } from './ui/editor.ts';
+import { crazyGames, noAds } from './platform/ads.ts';
 import { advancePreview, ensurePreview, previewRuleSets, type Preview } from './ui/preview.ts';
 import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
@@ -54,8 +55,17 @@ let confirmReset = false;
 const sound = new SoundPlayer();
 /** 検証用: 鳴らした効果音の記録(開発サーバーと撮影用ビルドだけ) */
 const soundLog: Sfx[] = [];
+/** 公開先(広告・遊んでいる区間の合図)。ビルド時の VITE_PLATFORM で選ぶ。指定がなければ広告なし */
+// 比較をここに直接書くと、ビルド時に値が埋め込まれ、使わない公開先の中身(CrazyGames の SDK の読み込み)は本番のファイルから消える
+const platform = import.meta.env.VITE_PLATFORM === 'crazygames' ? crazyGames() : noAds();
+void platform.init();
+/** 1日の終わりの広告を待っている間は、結果画面の操作を止める(公開先の決まり) */
+let adBusy = false;
+
 function sfx(s: Sfx): void {
   if (DEBUG_HOOKS) soundLog.push(s);
+  // 公開先の設定で音を消すよう求められていれば、ゲーム内の設定より優先して鳴らさない
+  if (platform.forcedMute()) return;
   sound.play(s);
 }
 /** 保存するか(検証用のURL指定で状態を変えたときは、本当の進行状況を上書きしないよう保存しない) */
@@ -207,6 +217,9 @@ resize();
 function setMode(m: Mode): void {
   mode = m;
   modeSince = performance.now();
+  // 遊んでいる区間を公開先に知らせる(1日の間だけ。編集画面・結果画面は休憩)
+  if (m === 'playing') platform.gameplayStart();
+  else platform.gameplayStop();
 }
 
 /**
@@ -239,6 +252,12 @@ function finishDay(): void {
   prepareProgress(openAfter > openBefore ? openAfter - 1 : null);
   persist(nextStageIdx);
   setMode('result');
+  // 1日の終わりの広告(出なくても、そのまま結果画面を使える)。広告が始まったら音を止め、終わったら戻す
+  adBusy = true;
+  void platform.midgame({
+    onAdStart: () => sound.setHidden(true),
+    onAdEnd: () => sound.setHidden(document.hidden),
+  }).then(() => { adBusy = false; });
   // 結果画面の演出(星が1つずつ現れる・カードが光って現れる: render.ts の drawResult)に合わせて鳴らす
   for (let i = 0; i < dayResult.stars; i++) setTimeout(() => sfx('star'), 250 + i * 300 + 120);
   if (newCards.length > 0) setTimeout(() => sfx('unlock'), 1400);
@@ -440,6 +459,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     return;
   }
   if (mode === 'result') {
+    if (adBusy) return;
     if (performance.now() - modeSince >= RESULT_INPUT_DELAY_MS && inRect(RETRY_BUTTON, p.x, p.y)) {
       sfx('click');
       prepareNextDay();
@@ -570,6 +590,7 @@ function frame(now: number): void {
     result: mode === 'result' ? dayResult : null,
     playHint: unlocked.length === 0 && tutorial.taps < 3,
     confirmReset: mode === 'ready' && confirmReset,
+    adBusy: mode === 'result' && adBusy,
   });
   if (px > 1) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
