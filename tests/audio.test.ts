@@ -31,18 +31,24 @@ describe('効果音', () => {
 });
 
 describe('BGM', () => {
-  it('8小節で1周し、同じ位置では同じ音になる。音量は効果音より小さい', async () => {
-    const { musicNotes, MUSIC_LOOP_STEPS } = await import('../src/platform/audio.ts');
-    for (let k = 0; k < MUSIC_LOOP_STEPS; k++) {
-      expect(musicNotes(k + MUSIC_LOOP_STEPS)).toEqual(musicNotes(k));
-      for (const n of musicNotes(k)) {
-        expect(n.vol).toBeLessThanOrEqual(0.08);
-        expect(n.freq).toBeGreaterThan(20);
-        expect(n.freq).toBeLessThan(2000);
+  it('どの曲も8小節で1周し、同じ位置では同じ音になる。音量は効果音より小さい。曲ごとに音が違う', async () => {
+    const { musicNotes, MUSIC_LOOP_STEPS, TRACKS } = await import('../src/platform/audio.ts');
+    const tracks = Object.keys(TRACKS) as (keyof typeof TRACKS)[];
+    expect(tracks.length).toBe(4);
+    for (const t of tracks) {
+      for (let k = 0; k < MUSIC_LOOP_STEPS; k++) {
+        expect(musicNotes(k + MUSIC_LOOP_STEPS, t)).toEqual(musicNotes(k, t));
+        for (const n of musicNotes(k, t)) {
+          expect(n.vol).toBeLessThanOrEqual(0.08);
+          expect(n.freq).toBeGreaterThan(20);
+          expect(n.freq).toBeLessThan(2500);
+        }
       }
+      // 小節の頭には必ずベースが鳴る
+      for (let bar = 0; bar < 8; bar++) expect(musicNotes(bar * 8, t).some((n) => n.freq < 120), t).toBe(true);
     }
-    // 小節の頭には必ずベースが鳴る
-    for (let bar = 0; bar < 8; bar++) expect(musicNotes(bar * 8).some((n) => n.freq < 100)).toBe(true);
+    const sig = (t: keyof typeof TRACKS) => JSON.stringify(Array.from({ length: 16 }, (_, k) => musicNotes(k, t)));
+    expect(new Set(tracks.map(sig)).size).toBe(4);
   });
   it('音の準備の前に BGM を頼んでも例外を出さない', async () => {
     const { SoundPlayer } = await import('../src/platform/audio.ts');

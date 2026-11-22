@@ -64,43 +64,84 @@ export const RECIPES: Record<Sfx, Note[]> = {
   ],
 };
 
-// ---- BGM(2026-11-22、ユーザーの依頼「プレイ中、簡単なBGMを流せないか」) ----
-// これもコードで生成する(外部の音素材は使わない)。エレベーターの中で流れるような、穏やかなラウンジ風の短い繰り返し。
-// 96BPM、8分音符で数える。4つの和音(Cmaj7 → Am7 → Dm7 → G7)を2小節ずつ、8小節で1周。
+// ---- BGM(2026-11-22、ユーザーの依頼「プレイ中、簡単なBGMを流せないか」「何パターンかあってもいい」) ----
+// これもコードで生成する(外部の音素材は使わない)。建物の種類(ステージの look)ごとに曲を変える。
+// どの曲も8分音符で数え、4つの和音を2小節ずつ、8小節で1周する。
 
-/** BGM の速さ: 8分音符1つの長さ(秒) */
-export const MUSIC_STEP_SEC = 60 / 96 / 2;
+export type MusicTrack = 'plain' | 'office' | 'department' | 'hotel';
+
+interface TrackDef {
+  bpm: number;
+  /** 和音(MIDI の番号。C4 = 60)。4つを2小節ずつ */
+  chords: readonly (readonly number[])[];
+  /** 分散和音の並び(和音の何番目の音か。-1 は休み)。8分音符8つで1小節 */
+  arp: readonly number[];
+  /** ベースを鳴らす8分音符の位置(小節の中) */
+  bass: readonly number[];
+  /** 分散和音の音色と高さ(オクターブ上げる数)と音量 */
+  arpType: OscillatorType;
+  arpOct: number;
+  arpVol: number;
+  /** 和音の伴奏の音量(0 なら鳴らさない) */
+  padVol: number;
+}
+
+export const TRACKS: Record<MusicTrack, TrackDef> = {
+  // 小さなビル: 穏やかなラウンジ風(Cmaj7 → Am7 → Dm7 → G7)
+  plain: {
+    bpm: 96,
+    chords: [[60, 64, 67, 71], [57, 60, 64, 67], [62, 65, 69, 72], [55, 59, 62, 65]],
+    arp: [0, 2, 1, 3, -1, 2, 1, -1], bass: [0, 4], arpType: 'sine', arpOct: 1, arpVol: 0.022, padVol: 0.018,
+  },
+  // オフィス: 少し速く軽快に。ベースが4分音符で歩く(Am7 → D7 → Gmaj7 → Cmaj7)
+  office: {
+    bpm: 112,
+    chords: [[57, 60, 64, 67], [62, 66, 69, 72], [55, 59, 62, 66], [60, 64, 67, 71]],
+    arp: [0, -1, 2, 1, -1, 3, 2, -1], bass: [0, 2, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.02, padVol: 0.012,
+  },
+  // デパート: 明るい店内の音楽風。高い音でチャイムのように(Fmaj7 → Em7 → Dm7 → Cmaj7)
+  department: {
+    bpm: 104,
+    chords: [[65, 69, 72, 76], [64, 67, 71, 74], [62, 65, 69, 72], [60, 64, 67, 71]],
+    arp: [3, 2, 1, 0, 1, 2, 3, -1], bass: [0, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.016, padVol: 0.014,
+  },
+  // ホテル: ゆったりしたジャズ風。音を少なく(E♭maj7 → Cm7 → Fm7 → B♭7)
+  hotel: {
+    bpm: 80,
+    chords: [[63, 67, 70, 74], [60, 63, 67, 70], [65, 68, 72, 75], [58, 62, 65, 68]],
+    arp: [0, -1, -1, 2, -1, 3, -1, -1], bass: [0, 3, 6], arpType: 'sine', arpOct: 1, arpVol: 0.026, padVol: 0.02,
+  },
+};
+
+/** その曲の8分音符1つの長さ(秒) */
+export function musicStepSec(track: MusicTrack): number {
+  return 60 / TRACKS[track].bpm / 2;
+}
 /** 1周の8分音符の数(8小節) */
 export const MUSIC_LOOP_STEPS = 64;
 
 const midi = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
-/** 和音(MIDI の番号。C4 = 60) */
-const CHORDS: readonly (readonly number[])[] = [
-  [60, 64, 67, 71], // Cmaj7
-  [57, 60, 64, 67], // Am7
-  [62, 65, 69, 72], // Dm7
-  [55, 59, 62, 65], // G7
-];
-/** 分散和音の並び(和音の何番目の音か。-1 は休み) */
-const ARP = [0, 2, 1, 3, -1, 2, 1, -1];
 
-/** 8分音符 step 番目に鳴らす音(at はその8分音符の始まりからの秒) */
-export function musicNotes(step: number): Note[] {
+/** 曲 track の8分音符 step 番目に鳴らす音(at はその8分音符の始まりからの秒) */
+export function musicNotes(step: number, track: MusicTrack = 'plain'): Note[] {
+  const d = TRACKS[track];
+  const sec = musicStepSec(track);
   const k = ((step % MUSIC_LOOP_STEPS) + MUSIC_LOOP_STEPS) % MUSIC_LOOP_STEPS;
-  const chord = CHORDS[Math.floor(k / 16)]!;
+  const chord = d.chords[Math.floor(k / 16)]!;
   const inBar = k % 8;
   const notes: Note[] = [];
-  // 和音の伴奏: 小節の頭で、和音を低めに長く(柔らかい三角波)
-  if (inBar === 0) {
-    for (const n of chord) notes.push({ at: 0, freq: midi(n - 12), dur: MUSIC_STEP_SEC * 8, type: 'triangle', vol: 0.018 });
+  // 和音の伴奏: 小節の頭で、和音を低めに長く
+  if (inBar === 0 && d.padVol > 0) {
+    for (const n of chord) notes.push({ at: 0, freq: midi(n - 12), dur: sec * 8, type: 'triangle', vol: d.padVol });
   }
-  // ベース: 1拍目と3拍目に根音
-  if (inBar === 0 || inBar === 4) {
-    notes.push({ at: 0, freq: midi(chord[0]! - 24), dur: MUSIC_STEP_SEC * 3, type: 'sine', vol: 0.07 });
+  // ベース: 根音(小節の後半は5度の音にして動きを付ける)
+  if (d.bass.includes(inBar)) {
+    const root = chord[0]! - 24;
+    notes.push({ at: 0, freq: midi(inBar >= 4 && d.bass.length > 2 ? root + 7 : root), dur: sec * 2.5, type: 'sine', vol: 0.07 });
   }
-  // 分散和音: 1オクターブ上で、ところどころ休む
-  const a = ARP[inBar]!;
-  if (a >= 0) notes.push({ at: 0, freq: midi(chord[a]! + 12), dur: MUSIC_STEP_SEC * 1.6, type: 'sine', vol: 0.022 });
+  // 分散和音
+  const a = d.arp[inBar]!;
+  if (a >= 0) notes.push({ at: 0, freq: midi(chord[a]! + 12 * d.arpOct), dur: sec * 1.6, type: d.arpType, vol: d.arpVol });
   return notes;
 }
 
@@ -110,6 +151,7 @@ export class SoundPlayer {
   private last: Partial<Record<Sfx, number>> = {};
   muted = false;
   private musicOn = false;
+  private musicTrack: MusicTrack = 'plain';
   private musicStep = 0;
   private musicNext = 0;
   private musicGain: GainNode | null = null;
@@ -119,7 +161,12 @@ export class SoundPlayer {
    * BGM を流すか。毎フレーム呼んでよい(同じ値なら何もしない)。
    * 流す間は、少し先(0.25秒)までの音を予約していく。消音中は予約しない。
    */
-  setMusic(on: boolean): void {
+  setMusic(on: boolean, track: MusicTrack = 'plain'): void {
+    // 曲が変わったら頭から(次に予約する音から新しい曲になる)
+    if (track !== this.musicTrack) {
+      this.musicTrack = track;
+      this.musicStep = 0;
+    }
     if (on === this.musicOn) return;
     // 音の準備(最初のタップ)の前は何もしない。準備ができた後の呼び出しで始まる
     if (!this.ctx || !this.master) return;
@@ -156,7 +203,7 @@ export class SoundPlayer {
       if (this.musicNext < now) this.musicNext = now + 0.05;
       while (this.musicNext < now + 0.25) {
         if (!this.muted) {
-          for (const n of musicNotes(this.musicStep)) {
+          for (const n of musicNotes(this.musicStep, this.musicTrack)) {
             const t0 = this.musicNext + n.at;
             const osc = this.ctx.createOscillator();
             const g = this.ctx.createGain();
@@ -172,7 +219,7 @@ export class SoundPlayer {
           }
         }
         this.musicStep++;
-        this.musicNext += MUSIC_STEP_SEC;
+        this.musicNext += musicStepSec(this.musicTrack);
       }
     } catch {
       // 何もしない
