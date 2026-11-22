@@ -29,3 +29,24 @@ describe('効果音', () => {
     expect(() => { p.unlock(); p.play('door'); p.setHidden(true); p.setHidden(false); }).not.toThrow();
   });
 });
+
+describe('BGM', () => {
+  it('8小節で1周し、同じ位置では同じ音になる。音量は効果音より小さい', async () => {
+    const { musicNotes, MUSIC_LOOP_STEPS } = await import('../src/platform/audio.ts');
+    for (let k = 0; k < MUSIC_LOOP_STEPS; k++) {
+      expect(musicNotes(k + MUSIC_LOOP_STEPS)).toEqual(musicNotes(k));
+      for (const n of musicNotes(k)) {
+        expect(n.vol).toBeLessThanOrEqual(0.08);
+        expect(n.freq).toBeGreaterThan(20);
+        expect(n.freq).toBeLessThan(2000);
+      }
+    }
+    // 小節の頭には必ずベースが鳴る
+    for (let bar = 0; bar < 8; bar++) expect(musicNotes(bar * 8).some((n) => n.freq < 100)).toBe(true);
+  });
+  it('音の準備の前に BGM を頼んでも例外を出さない', async () => {
+    const { SoundPlayer } = await import('../src/platform/audio.ts');
+    const p = new SoundPlayer();
+    expect(() => { p.setMusic(true); p.setMusic(false); }).not.toThrow();
+  });
+});

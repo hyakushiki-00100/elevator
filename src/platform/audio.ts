@@ -64,11 +64,120 @@ export const RECIPES: Record<Sfx, Note[]> = {
   ],
 };
 
+// ---- BGM(2026-11-22、ユーザーの依頼「プレイ中、簡単なBGMを流せないか」) ----
+// これもコードで生成する(外部の音素材は使わない)。エレベーターの中で流れるような、穏やかなラウンジ風の短い繰り返し。
+// 96BPM、8分音符で数える。4つの和音(Cmaj7 → Am7 → Dm7 → G7)を2小節ずつ、8小節で1周。
+
+/** BGM の速さ: 8分音符1つの長さ(秒) */
+export const MUSIC_STEP_SEC = 60 / 96 / 2;
+/** 1周の8分音符の数(8小節) */
+export const MUSIC_LOOP_STEPS = 64;
+
+const midi = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
+/** 和音(MIDI の番号。C4 = 60) */
+const CHORDS: readonly (readonly number[])[] = [
+  [60, 64, 67, 71], // Cmaj7
+  [57, 60, 64, 67], // Am7
+  [62, 65, 69, 72], // Dm7
+  [55, 59, 62, 65], // G7
+];
+/** 分散和音の並び(和音の何番目の音か。-1 は休み) */
+const ARP = [0, 2, 1, 3, -1, 2, 1, -1];
+
+/** 8分音符 step 番目に鳴らす音(at はその8分音符の始まりからの秒) */
+export function musicNotes(step: number): Note[] {
+  const k = ((step % MUSIC_LOOP_STEPS) + MUSIC_LOOP_STEPS) % MUSIC_LOOP_STEPS;
+  const chord = CHORDS[Math.floor(k / 16)]!;
+  const inBar = k % 8;
+  const notes: Note[] = [];
+  // 和音の伴奏: 小節の頭で、和音を低めに長く(柔らかい三角波)
+  if (inBar === 0) {
+    for (const n of chord) notes.push({ at: 0, freq: midi(n - 12), dur: MUSIC_STEP_SEC * 8, type: 'triangle', vol: 0.018 });
+  }
+  // ベース: 1拍目と3拍目に根音
+  if (inBar === 0 || inBar === 4) {
+    notes.push({ at: 0, freq: midi(chord[0]! - 24), dur: MUSIC_STEP_SEC * 3, type: 'sine', vol: 0.07 });
+  }
+  // 分散和音: 1オクターブ上で、ところどころ休む
+  const a = ARP[inBar]!;
+  if (a >= 0) notes.push({ at: 0, freq: midi(chord[a]! + 12), dur: MUSIC_STEP_SEC * 1.6, type: 'sine', vol: 0.022 });
+  return notes;
+}
+
 export class SoundPlayer {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private last: Partial<Record<Sfx, number>> = {};
   muted = false;
+  private musicOn = false;
+  private musicStep = 0;
+  private musicNext = 0;
+  private musicGain: GainNode | null = null;
+  private musicTimer: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * BGM を流すか。毎フレーム呼んでよい(同じ値なら何もしない)。
+   * 流す間は、少し先(0.25秒)までの音を予約していく。消音中は予約しない。
+   */
+  setMusic(on: boolean): void {
+    if (on === this.musicOn) return;
+    // 音の準備(最初のタップ)の前は何もしない。準備ができた後の呼び出しで始まる
+    if (!this.ctx || !this.master) return;
+    this.musicOn = on;
+    try {
+      if (!this.musicGain) {
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.gain.value = 0;
+        this.musicGain.connect(this.master);
+      }
+      const t = this.ctx.currentTime;
+      // 始めるときはふわっと大きく、止めるときはすっと小さく(ぶつ切りにしない)
+      this.musicGain.gain.cancelScheduledValues(t);
+      this.musicGain.gain.setTargetAtTime(on ? 1 : 0, t, on ? 0.6 : 0.25);
+      if (on) {
+        this.musicNext = t + 0.1;
+        if (!this.musicTimer) this.musicTimer = setInterval(() => this.scheduleMusic(), 50);
+      }
+    } catch {
+      // 音が出せなくてもゲームは続ける
+    }
+  }
+
+  private scheduleMusic(): void {
+    try {
+      if (!this.ctx || !this.musicGain) return;
+      if (!this.musicOn) {
+        // 小さくなり切ったら予約をやめる
+        if (this.musicGain.gain.value < 0.001 && this.musicTimer) { clearInterval(this.musicTimer); this.musicTimer = null; }
+        return;
+      }
+      if (this.ctx.state !== 'running') return;
+      const now = this.ctx.currentTime;
+      if (this.musicNext < now) this.musicNext = now + 0.05;
+      while (this.musicNext < now + 0.25) {
+        if (!this.muted) {
+          for (const n of musicNotes(this.musicStep)) {
+            const t0 = this.musicNext + n.at;
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = n.type;
+            osc.frequency.setValueAtTime(n.freq, t0);
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(n.vol, t0 + Math.min(0.06, n.dur * 0.2));
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.dur);
+            osc.connect(g);
+            g.connect(this.musicGain);
+            osc.start(t0);
+            osc.stop(t0 + n.dur + 0.05);
+          }
+        }
+        this.musicStep++;
+        this.musicNext += MUSIC_STEP_SEC;
+      }
+    } catch {
+      // 何もしない
+    }
+  }
 
   /** 音の準備の状態(検証用): none = まだ作っていない / suspended / running / closed */
   get state(): string {
