@@ -14,6 +14,7 @@ import {
   compactLayout, dropFromHand, fitLayout, moveSlot, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
 } from './ui/editor.ts';
 import { crazyGames, noAds } from './platform/ads.ts';
+import { drawCover, type CoverKind } from './render/cover.ts';
 import { advancePreview, ensurePreview, previewRuleSets, type Preview } from './ui/preview.ts';
 import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveData } from './platform/storage.ts';
 import { decodeShare, encodeShare } from './share/codec.ts';
@@ -509,7 +510,20 @@ const MAX_STEPS_PER_FRAME = 5;
 let acc = 0;
 let last = performance.now();
 
+/** 撮影専用: ?cover=landscape|portrait|square なら投稿用の表紙の画像だけを描く(本番ビルドには入らない) */
+const COVER: CoverKind | null = (() => {
+  if (!DEBUG_HOOKS) return null;
+  const v = new URLSearchParams(location.search).get('cover');
+  return v === 'landscape' || v === 'portrait' || v === 'square' ? v : null;
+})();
+
 function frame(now: number): void {
+  if (COVER) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawCover(ctx, cssW, cssH, COVER);
+    requestAnimationFrame(frame);
+    return;
+  }
   // 編集画面: 試しに動かす窓を進める(ルールや持ち上げたカードが変わったら作り直す)
   if (mode === 'ready' && unlocked.length > 0) {
     const st = stage();

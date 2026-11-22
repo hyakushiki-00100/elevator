@@ -1,5 +1,5 @@
 {
-  "name": "elevator",
+  "name": "rule-the-lift",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +12,8 @@
     "calibrate": "node tools/calibrate.ts",
     "check:bots": "node tests/bot/balance.ts",
     "check:screens": "vite build --mode screenshot --outDir out/build-screenshot && node scripts/screenshots.ts",
+    "package": "npm run build && npm run build:crazygames && node scripts/package.ts",
+    "promo": "vite build --mode screenshot --outDir out/build-screenshot && node scripts/promo.ts",
     "check": "npm run build && npm test && npm run check:bots && npm run check:screens"
   },
   "devDependencies": {
