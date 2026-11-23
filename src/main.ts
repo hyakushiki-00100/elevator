@@ -514,7 +514,7 @@ let last = performance.now();
 const COVER: CoverKind | null = (() => {
   if (!DEBUG_HOOKS) return null;
   const v = new URLSearchParams(location.search).get('cover');
-  return v === 'landscape' || v === 'portrait' || v === 'square' ? v : null;
+  return v === 'landscape' || v === 'portrait' || v === 'square' || v === 'itch' ? v : null;
 })();
 
 function frame(now: number): void {

@@ -5,7 +5,7 @@ import { drawCard } from './cards.ts';
 import { drawNumber, fillCircle, roundRect } from './icons.ts';
 import { floorColor } from './render.ts';
 
-export type CoverKind = 'landscape' | 'portrait' | 'square';
+export type CoverKind = 'landscape' | 'portrait' | 'square' | 'itch';
 
 const ELEV = ['#4fc3f7', '#f06292'];
 const ACCENT = '#ff9a2e';
@@ -26,6 +26,14 @@ function layout(kind: CoverKind, W: number, H: number): { title: Box; building: 
       title: { x: W * 0.06, y: H * 0.03, w: W * 0.88, h: H * 0.12 },
       building: { x: W * 0.1, y: H * 0.16, w: W * 0.8, h: H * 0.56 },
       cards: { x: W * 0.06, y: H * 0.74, w: W * 0.88, h: H * 0.24 },
+    };
+  }
+  if (kind === 'itch') {
+    // itch.io のカバー(630x500、少し横長): 上にタイトル、下に建物とカード
+    return {
+      title: { x: W * 0.05, y: H * 0.04, w: W * 0.9, h: H * 0.2 },
+      building: { x: W * 0.05, y: H * 0.28, w: W * 0.5, h: H * 0.68 },
+      cards: { x: W * 0.53, y: H * 0.36, w: W * 0.44, h: H * 0.56 },
     };
   }
   return {

@@ -39,6 +39,8 @@ const covers = [
   { kind: 'landscape', w: 1920, h: 1080 },
   { kind: 'portrait', w: 800, h: 1200 },
   { kind: 'square', w: 800, h: 800 },
+  // itch.io のカバー(推奨の縦横比 630x500。確信度: 中)
+  { kind: 'itch', w: 630, h: 500 },
 ];
 for (const c of covers) {
   const ctx = await browser.newContext({ viewport: { width: c.w, height: c.h }, deviceScaleFactor: 1 });

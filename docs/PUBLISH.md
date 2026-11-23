@@ -11,7 +11,7 @@
 |---|---|---|
 | itch.io 用の ZIP(広告なし) | `npm run package` | `out/release/rule-the-lift-itch.zip` |
 | CrazyGames 用の ZIP(SDK 版) | `npm run package` | `out/release/rule-the-lift-crazygames.zip` |
-| 表紙の画像3枚(1920×1080 / 800×1200 / 800×800) | `npm run promo` | `out/promo/cover-*.png` |
+| 表紙の画像(CrazyGames 用3枚 1920×1080 / 800×1200 / 800×800、itch.io 用 630×500) | `npm run promo` | `out/promo/cover-*.png` |
 | 紹介動画2本(横 1920×1080 / 縦 1080×1620、各18秒、音なし) | `npm run promo` | `out/promo/video-*.mp4` |
 
 - `npm run package` は `zip` コマンドを使います。Windows で `zip` がない場合は、`dist` フォルダの**中身**(`index.html` と `assets`)を選んで「送る → 圧縮フォルダー」で ZIP にしてください。**フォルダごと**圧縮すると `index.html` が一段下になり、itch.io で動きません。
@@ -35,7 +35,7 @@
    - Viewport dimensions: **960 × 540**(自動検出は失敗することがあるので、手で入れる)
    - 全画面のボタン: 付ける
    - Mobile friendly: 付ける、向きは横(Landscape)
-6. 説明文・ジャンル・タグを入れる(下の「8. 説明文の案」)。表紙の画像は `cover-landscape` を使ってもよい(itch.io の推奨の大きさは未確認)。
+6. 説明文・ジャンル・タグを入れる(下の「8. 説明文の案」)。カバー画像は `cover-itch-630x500.png`(登録欄はページ右側の列の一番上。推奨の大きさは確信度: 中)。生成AIの申告(AI generation disclosure)は Yes、Code・Graphics・Sounds(説明文を案のまま使うなら Text も)。
 7. 公開の範囲を「下書き(Draft)」のまま保存し、自分で開いて遊べることを確かめる。
    - 確かめること: 最初の画面が出る/1日を遊べる/カードを置ける/音が鳴る/スマホで横向きにして遊べる
 8. 問題なければ「公開(Public)」にする。
