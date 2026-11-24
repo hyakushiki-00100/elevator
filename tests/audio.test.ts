@@ -45,7 +45,7 @@ describe('BGM', () => {
         }
       }
       // 小節の頭には必ずベースが鳴る
-      for (let bar = 0; bar < 8; bar++) expect(musicNotes(bar * 8, t).some((n) => n.freq < 120), t).toBe(true);
+      for (let bar = 0; bar < 8; bar++) expect(musicNotes(bar * 8, t).some((n) => n.freq < 200), t).toBe(true);
     }
     const sig = (t: keyof typeof TRACKS) => JSON.stringify(Array.from({ length: 16 }, (_, k) => musicNotes(k, t)));
     expect(new Set(tracks.map(sig)).size).toBe(4);

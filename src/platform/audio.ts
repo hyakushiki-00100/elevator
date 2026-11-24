@@ -66,6 +66,8 @@ export const RECIPES: Record<Sfx, Note[]> = {
 
 // ---- BGM(2026-11-22、ユーザーの依頼「プレイ中、簡単なBGMを流せないか」「何パターンかあってもいい」) ----
 // これもコードで生成する(外部の音素材は使わない)。建物の種類(ステージの look)ごとに曲を変える。
+// 音量と音色は、スマホのスピーカーでも聞こえるように決めた(2026-11-24、iPhone で聞こえないと報告。
+// 以前は正弦波中心で小さく、ベースは約65Hz と低すぎた)。
 // どの曲も8分音符で数え、4つの和音を2小節ずつ、8小節で1周する。
 
 export type MusicTrack = 'plain' | 'office' | 'department' | 'hotel';
@@ -91,25 +93,25 @@ export const TRACKS: Record<MusicTrack, TrackDef> = {
   plain: {
     bpm: 96,
     chords: [[60, 64, 67, 71], [57, 60, 64, 67], [62, 65, 69, 72], [55, 59, 62, 65]],
-    arp: [0, 2, 1, 3, -1, 2, 1, -1], bass: [0, 4], arpType: 'sine', arpOct: 1, arpVol: 0.022, padVol: 0.018,
+    arp: [0, 2, 1, 3, -1, 2, 1, -1], bass: [0, 4], arpType: 'triangle', arpOct: 1, arpVol: 0.04, padVol: 0.03,
   },
   // オフィス: 少し速く軽快に。ベースが4分音符で歩く(Am7 → D7 → Gmaj7 → Cmaj7)
   office: {
     bpm: 112,
     chords: [[57, 60, 64, 67], [62, 66, 69, 72], [55, 59, 62, 66], [60, 64, 67, 71]],
-    arp: [0, -1, 2, 1, -1, 3, 2, -1], bass: [0, 2, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.02, padVol: 0.012,
+    arp: [0, -1, 2, 1, -1, 3, 2, -1], bass: [0, 2, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.036, padVol: 0.022,
   },
   // デパート: 明るい店内の音楽風。高い音でチャイムのように(Fmaj7 → Em7 → Dm7 → Cmaj7)
   department: {
     bpm: 104,
     chords: [[65, 69, 72, 76], [64, 67, 71, 74], [62, 65, 69, 72], [60, 64, 67, 71]],
-    arp: [3, 2, 1, 0, 1, 2, 3, -1], bass: [0, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.016, padVol: 0.014,
+    arp: [3, 2, 1, 0, 1, 2, 3, -1], bass: [0, 4, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.03, padVol: 0.026,
   },
   // ホテル: ゆったりしたジャズ風。音を少なく(E♭maj7 → Cm7 → Fm7 → B♭7)
   hotel: {
     bpm: 80,
     chords: [[63, 67, 70, 74], [60, 63, 67, 70], [65, 68, 72, 75], [58, 62, 65, 68]],
-    arp: [0, -1, -1, 2, -1, 3, -1, -1], bass: [0, 3, 6], arpType: 'sine', arpOct: 1, arpVol: 0.026, padVol: 0.02,
+    arp: [0, -1, -1, 2, -1, 3, -1, -1], bass: [0, 3, 6], arpType: 'triangle', arpOct: 1, arpVol: 0.045, padVol: 0.032,
   },
 };
 
@@ -136,8 +138,10 @@ export function musicNotes(step: number, track: MusicTrack = 'plain'): Note[] {
   }
   // ベース: 根音(小節の後半は5度の音にして動きを付ける)
   if (d.bass.includes(inBar)) {
-    const root = chord[0]! - 24;
-    notes.push({ at: 0, freq: midi(inBar >= 4 && d.bass.length > 2 ? root + 7 : root), dur: sec * 2.5, type: 'sine', vol: 0.07 });
+    // スマホのスピーカーは低い音がほとんど出ないため(2026-11-24、iPhone で BGM が聞こえないと報告)、
+    // ベースは1オクターブ上げ、倍音の多い三角波にする(以前は2オクターブ下の正弦波で、約65Hz)
+    const root = chord[0]! - 12;
+    notes.push({ at: 0, freq: midi(inBar >= 4 && d.bass.length > 2 ? root + 7 : root), dur: sec * 2.5, type: 'triangle', vol: 0.06 });
   }
   // 分散和音
   const a = d.arp[inBar]!;
@@ -159,7 +163,8 @@ export class SoundPlayer {
 
   /**
    * BGM を流すか。毎フレーム呼んでよい(同じ値なら何もしない)。
-   * 流す間は、少し先(0.25秒)までの音を予約していく。消音中は予約しない。
+   * 流す間は、少し先(0.5秒)までの音を予約していく。消音中は予約しない。
+   * 予約は毎フレームの tickMusic と、念のためのタイマーの両方から行う(ページの中の枠ではタイマーが間引かれることがあるため)。
    */
   setMusic(on: boolean, track: MusicTrack = 'plain'): void {
     // 曲が変わったら頭から(次に予約する音から新しい曲になる)
@@ -190,6 +195,11 @@ export class SoundPlayer {
     }
   }
 
+  /** 毎フレーム呼ぶ(BGM の予約を進める) */
+  tickMusic(): void {
+    this.scheduleMusic();
+  }
+
   private scheduleMusic(): void {
     try {
       if (!this.ctx || !this.musicGain) return;
@@ -201,7 +211,7 @@ export class SoundPlayer {
       if (this.ctx.state !== 'running') return;
       const now = this.ctx.currentTime;
       if (this.musicNext < now) this.musicNext = now + 0.05;
-      while (this.musicNext < now + 0.25) {
+      while (this.musicNext < now + 0.5) {
         if (!this.muted) {
           for (const n of musicNotes(this.musicStep, this.musicTrack)) {
             const t0 = this.musicNext + n.at;

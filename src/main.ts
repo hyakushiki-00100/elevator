@@ -520,6 +520,7 @@ const COVER: CoverKind | null = (() => {
 function frame(now: number): void {
   // BGM はプレイ中だけ。公開先の設定で音を消すよう求められていれば流さない(消音ボタンの設定は SoundPlayer の中で見る)
   sound.setMusic(mode === 'playing' && !platform.forcedMute(), stage().look);
+  sound.tickMusic();
   if (COVER) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawCover(ctx, cssW, cssH, COVER);
