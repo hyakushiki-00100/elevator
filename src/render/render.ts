@@ -9,13 +9,13 @@ import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
   BUILDING_RIGHT, EDITOR_PANEL, EDITOR_PLAY, LOGICAL_H, LOGICAL_W, PANEL_W, PANEL_X, RESULT_PANEL,
-  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, CARD_H, CARD_W, START_BUTTON, START_DEMO, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
+  MUTE_BUTTON, RETRY_BUTTON, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, CARD_H, CARD_W, START_BUTTON, START_DEMO, VOLUME_PANEL, volumeIconRect, volumeLevelRect, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES, carHeight, carTop, floorTop, handRect, rowButtonRect, slotRect, stageTabRect,
   EDITOR_PREVIEW, type Layout, type Rect, type View,
 } from './layout.ts';
 import { CARD_LOOP_MS, drawCard, drawEmptySlot } from './cards.ts';
 import { theme } from './theme.ts';
 import {
-  drawBuildingIcon, drawCarIcon, iconTrash, drawNumber, drawPointer, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
+  drawBuildingIcon, drawCarIcon, iconTrash, iconLevel, iconNote, drawNumber, drawPointer, fillCircle, iconShare, iconSpeaker, iconCalendar, iconCheck, iconClock, iconCross, iconFinger, iconPhase, iconPlay, iconRetry, iconStar, roundRect,
 } from './icons.ts';
 
 // 描画は sim の状態を読むだけで、書き換えない。乱数も使わない。
@@ -91,6 +91,10 @@ export interface DrawArgs {
   result: DayResult | null;
   /** 音を消しているか(消音ボタンの絵) */
   muted: boolean;
+  /** 音量の段階(0=無 1=小 2=中 3=大)と、音量の窓を開いているか */
+  sfxLevel: number;
+  musicLevel: number;
+  volumeOpen: boolean;
   /** 音が鳴らせる状態か(準備を試したのに鳴らせないとき false。消音ボタンに黄色の点を出す) */
   audioOk: boolean;
   /** 編集画面: 持ち上げているカード(手持ちの何番目か。枠から持ち上げたときは null) */
@@ -180,11 +184,44 @@ export function draw(a: DrawArgs): void {
   ctx.fill();
   iconSpeaker(ctx, mb.x + mb.w / 2, mb.y + mb.h / 2, mb.w * 0.36, a.muted);
   if (!a.muted && !a.audioOk) fillCircle(ctx, mb.x + mb.w - 5, mb.y + 5, 5, '#f5c542');
+  if (a.volumeOpen) drawVolumePanel(ctx, a);
   drawTapRipples(ctx, a.effects, a.now);
   ctx.restore();
 
   // 縦長の画面では、上の余白に「横向きにして」の図を出す(文字は使わない。操作は妨げない)
   if (a.cssH > a.cssW) drawRotateHint(ctx, a);
+}
+
+/** 音量の窓: 上段=BGM(音符)、下段=効果音(スピーカー)。各段に 無・小・中・大。選んでいる段階を光らせる */
+function drawVolumePanel(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
+  const p = VOLUME_PANEL;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = T().dialogBg;
+  roundRect(ctx, p.x, p.y, p.w, p.h, 10);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, p.x, p.y, p.w, p.h, 10);
+  ctx.stroke();
+  for (const row of ['music', 'sfx'] as const) {
+    const ic = volumeIconRect(row);
+    const cx = ic.x + ic.w / 2;
+    const cy = ic.y + ic.h / 2;
+    if (row === 'music') iconNote(ctx, cx, cy, 13, T().text);
+    else iconSpeaker(ctx, cx, cy, 14, false);
+    const current = row === 'music' ? a.musicLevel : a.sfxLevel;
+    for (let lv = 0; lv < 4; lv++) {
+      const r = volumeLevelRect(row, lv);
+      const on = lv === current;
+      ctx.fillStyle = on ? T().buttonActive : T().button;
+      roundRect(ctx, r.x, r.y, r.w, r.h, 6);
+      ctx.fill();
+      iconLevel(ctx, r.x + r.w / 2, r.y + r.h / 2, 13, lv, on ? '#1a1a1a' : T().text);
+    }
+  }
 }
 
 /** 縦長の画面のとき、上の余白に「スマホを横向きに回す」動きの図を描く */

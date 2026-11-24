@@ -401,3 +401,41 @@ export function iconTrash(ctx: CanvasRenderingContext2D, x: number, y: number, r
   ctx.moveTo(x + r * 0.2, y - r * 0.25); ctx.lineTo(x + r * 0.2, y + r * 0.65);
   ctx.stroke();
 }
+
+/** 音符(BGM の印)。中心 (x, y)、大きさ r */
+export function iconNote(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, r * 0.14);
+  // 2つの玉と、それをつなぐ旗
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.45, y + r * 0.55, r * 0.3, r * 0.22, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(x + r * 0.45, y + r * 0.4, r * 0.3, r * 0.22, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.18, y + r * 0.5); ctx.lineTo(x - r * 0.18, y - r * 0.6);
+  ctx.lineTo(x + r * 0.72, y - r * 0.75); ctx.lineTo(x + r * 0.72, y + r * 0.35);
+  ctx.stroke();
+}
+
+/** 音量の段階の絵: 0 は赤い×、1〜3 は高さの違う棒が1〜3本 */
+export function iconLevel(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, level: number, color: string): void {
+  if (level === 0) {
+    ctx.strokeStyle = '#e5484d';
+    ctx.lineWidth = Math.max(2.5, r * 0.18);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.5, y - r * 0.5); ctx.lineTo(x + r * 0.5, y + r * 0.5);
+    ctx.moveTo(x + r * 0.5, y - r * 0.5); ctx.lineTo(x - r * 0.5, y + r * 0.5);
+    ctx.stroke();
+    return;
+  }
+  const bw = r * 0.38;
+  const gap = r * 0.18;
+  const left = x - (3 * bw + 2 * gap) / 2;
+  for (let i = 0; i < 3; i++) {
+    const h = r * (0.5 + i * 0.4);
+    ctx.fillStyle = i < level ? color : 'rgba(255,255,255,0.15)';
+    ctx.fillRect(left + i * (bw + gap), y + r * 0.7 - h, bw, h);
+  }
+}

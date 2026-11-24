@@ -149,11 +149,44 @@ export function musicNotes(step: number, track: MusicTrack = 'plain'): Note[] {
   return notes;
 }
 
+/**
+ * 音量の段階(2026-11-24、ユーザーの依頼「BGM だけ消したい人、ゲームだけ無音にしたい人もいる」)。
+ * BGM と効果音を別々に 0=無 / 1=小 / 2=中 / 3=大 の4段階。値はその段階で音にかける倍率。
+ */
+export const LEVEL_GAIN = [0, 0.35, 0.65, 1] as const;
+export type VolumeLevel = 0 | 1 | 2 | 3;
+export function isVolumeLevel(x: unknown): x is VolumeLevel {
+  return x === 0 || x === 1 || x === 2 || x === 3;
+}
+
 export class SoundPlayer {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private last: Partial<Record<Sfx, number>> = {};
-  muted = false;
+  /** 効果音の段階(既定は大) */
+  sfxLevel: VolumeLevel = 3;
+  /** BGM の段階(既定は中。BGM はスマホで聞こえるよう大きめに作ってあり、PC では目立ちやすいため) */
+  private musicLvl: VolumeLevel = 2;
+  /** 両方とも無なら true(消音ボタンの絵を赤い×にする) */
+  get muted(): boolean {
+    return this.sfxLevel === 0 && this.musicLvl === 0;
+  }
+  get musicLevel(): VolumeLevel {
+    return this.musicLvl;
+  }
+  /** BGM の段階を変える(流している最中なら、すぐ大きさを変える) */
+  set musicLevel(l: VolumeLevel) {
+    this.musicLvl = l;
+    try {
+      if (this.ctx && this.musicGain && this.musicOn) {
+        const t = this.ctx.currentTime;
+        this.musicGain.gain.cancelScheduledValues(t);
+        this.musicGain.gain.setTargetAtTime(LEVEL_GAIN[l], t, 0.1);
+      }
+    } catch {
+      // 何もしない
+    }
+  }
   private musicOn = false;
   private musicTrack: MusicTrack = 'plain';
   private musicStep = 0;
@@ -185,7 +218,7 @@ export class SoundPlayer {
       const t = this.ctx.currentTime;
       // 始めるときはふわっと大きく、止めるときはすっと小さく(ぶつ切りにしない)
       this.musicGain.gain.cancelScheduledValues(t);
-      this.musicGain.gain.setTargetAtTime(on ? 1 : 0, t, on ? 0.6 : 0.25);
+      this.musicGain.gain.setTargetAtTime(on ? LEVEL_GAIN[this.musicLvl] : 0, t, on ? 0.6 : 0.25);
       if (on) {
         this.musicNext = t + 0.1;
         if (!this.musicTimer) this.musicTimer = setInterval(() => this.scheduleMusic(), 50);
@@ -212,7 +245,7 @@ export class SoundPlayer {
       const now = this.ctx.currentTime;
       if (this.musicNext < now) this.musicNext = now + 0.05;
       while (this.musicNext < now + 0.5) {
-        if (!this.muted) {
+        if (this.musicLvl > 0) {
           for (const n of musicNotes(this.musicStep, this.musicTrack)) {
             const t0 = this.musicNext + n.at;
             const osc = this.ctx.createOscillator();
@@ -303,7 +336,8 @@ export class SoundPlayer {
   }
 
   play(s: Sfx): void {
-    if (this.muted || !this.ctx || !this.master || this.ctx.state !== 'running') return;
+    if (this.sfxLevel === 0 || !this.ctx || !this.master || this.ctx.state !== 'running') return;
+    const scale = LEVEL_GAIN[this.sfxLevel];
     const nowMs = performance.now();
     if (!shouldPlay(this.last, s, nowMs)) return;
     this.last[s] = nowMs;
@@ -317,7 +351,7 @@ export class SoundPlayer {
         if (n.freqEnd !== undefined) osc.frequency.exponentialRampToValueAtTime(n.freqEnd, t0 + n.at + n.dur);
         // 立ち上がりを少しだけ丸め、指数的に消える(プチッという雑音を防ぐ)
         g.gain.setValueAtTime(0.0001, t0 + n.at);
-        g.gain.exponentialRampToValueAtTime(n.vol, t0 + n.at + 0.008);
+        g.gain.exponentialRampToValueAtTime(n.vol * scale, t0 + n.at + 0.008);
         g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
         osc.connect(g);
         g.connect(this.master);

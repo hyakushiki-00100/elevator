@@ -149,3 +149,23 @@ describe('引っ張って置く方式(枠の位置は固定)', () => {
     expect(fitLayout([['nearest', 'sameDir', 'express']], 2, 2, ['nearest', 'sameDir', 'express'])).toEqual([['nearest', 'sameDir'], []]);
   });
 });
+
+describe('音量の窓', () => {
+  it('窓は画面の中にあり、消音ボタンと重ならない。段階のボタンは窓の中で互いに重ならない', async () => {
+    const L = await import('../src/render/layout.ts');
+    const p = L.VOLUME_PANEL;
+    expect(p.x + p.w).toBeLessThanOrEqual(L.LOGICAL_W);
+    expect(p.y).toBeGreaterThanOrEqual(L.MUTE_BUTTON.y + L.MUTE_BUTTON.h);
+    for (const row of ['music', 'sfx'] as const) {
+      for (let lv = 0; lv < 4; lv++) {
+        const r = L.volumeLevelRect(row, lv);
+        expect(L.inRect(p, r.x, r.y) && L.inRect(p, r.x + r.w, r.y + r.h)).toBe(true);
+        expect(L.volumeHit(r.x + r.w / 2, r.y + r.h / 2)).toEqual({ row, level: lv });
+        if (lv > 0) expect(L.volumeLevelRect(row, lv - 1).x + L.volumeLevelRect(row, lv - 1).w).toBeLessThan(r.x);
+      }
+    }
+    expect(L.volumeHit(p.x + 2, p.y + 2)).toBe('panel');
+    expect(L.volumeHit(10, 10)).toBeNull();
+  });
+});
+

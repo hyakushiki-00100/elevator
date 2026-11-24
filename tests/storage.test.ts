@@ -20,6 +20,8 @@ const sample: SaveData = {
   rules: { 1: [['sameDir', 'nearest']], 2: [['nearest'], ['express', 'nearest']] },
   lastStage: 2,
   muted: true,
+  sfx: 0,
+  music: 0,
   tutorial: { taps: 3, placed: true },
 };
 
@@ -91,15 +93,16 @@ describe('進行状況を消す', () => {
   it('カード・星・ルール・案内を消し、音の設定だけ残す', () => {
     const s = new MemoryStore();
     writeSave(s, { ...emptySave(), unlocked: ['nearest', 'sameDir'], bestStars: { 1: 3 }, muted: true, tutorial: { taps: 5, placed: true } });
-    expect(resetSave(s, true)).toBe(true);
+    expect(resetSave(s, { sfx: 1, music: 0 })).toBe(true);
     const d = loadSave(s)!;
     expect(d.unlocked).toEqual([]);
     expect(d.bestStars).toEqual({});
     expect(d.tutorial).toEqual({ taps: 0, placed: false });
-    expect(d.muted).toBe(true);
+    expect(d.sfx).toBe(1);
+    expect(d.music).toBe(0);
   });
   it('保存できない環境でも例外を出さない', () => {
-    expect(resetSave(null, false)).toBe(false);
+    expect(resetSave(null, { sfx: 3, music: 2 })).toBe(false);
   });
 });
 
@@ -109,3 +112,21 @@ describe('空いた枠の保存', () => {
     expect(d.rules[1]).toEqual([[null, 'nearest', null, 'sameDir']]);
   });
 });
+
+describe('音量の段階の保存', () => {
+  it('段階を書いて読むと戻る。範囲外・小数は既定に戻す', () => {
+    const d = parseSave(JSON.stringify({ ...emptySave(), sfx: 1, music: 3 }))!;
+    expect([d.sfx, d.music]).toEqual([1, 3]);
+    const bad = parseSave(JSON.stringify({ ...emptySave(), sfx: 7, music: 1.5 }))!;
+    expect([bad.sfx, bad.music]).toEqual([3, 2]);
+  });
+  it('段階のない古いデータ: 消音していたら両方とも無、そうでなければ既定(効果音=大、BGM=中)', () => {
+    const base = { ...emptySave() } as Record<string, unknown>;
+    delete base['sfx']; delete base['music'];
+    const muted = parseSave(JSON.stringify({ ...base, muted: true }))!;
+    expect([muted.sfx, muted.music]).toEqual([0, 0]);
+    const plain = parseSave(JSON.stringify({ ...base, muted: false }))!;
+    expect([plain.sfx, plain.music]).toEqual([3, 2]);
+  });
+});
+

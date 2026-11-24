@@ -19,13 +19,17 @@ export interface SaveData {
   /** 最後に選んでいたステージの id */
   lastStage: number;
   /** 音を消しているか(後から足した項目。古い保存データにはないので、ないときは false) */
+  /** 両方とも無か(古いデータとの互換のため残す。読み込みでは sfx・music を優先する) */
   muted: boolean;
+  /** 効果音・BGM の音量の段階(0=無 1=小 2=中 3=大。2026-11-24 追加) */
+  sfx: number;
+  music: number;
   /** 案内(指の手本)の進み具合(後から足した項目。ないときは最初から) */
   tutorial: { taps: number; placed: boolean };
 }
 
 export function emptySave(): SaveData {
-  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false, tutorial: { taps: 0, placed: false } };
+  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false, sfx: 3, music: 2, tutorial: { taps: 0, placed: false } };
 }
 
 /** localStorage と同じ形の最小限の窓口(テストでは偽物を渡す) */
@@ -76,6 +80,11 @@ export function parseSave(text: string | null): SaveData | null {
   const ls = raw['lastStage'];
   if (typeof ls === 'number' && Number.isInteger(ls) && ls >= 1 && ls <= 999) out.lastStage = ls;
   out.muted = raw['muted'] === true;
+  // 音量の段階。ない古いデータは、消音していたなら両方とも無、そうでなければ既定(効果音=大、BGM=中)
+  const lv = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 3;
+  if (out.muted) { out.sfx = 0; out.music = 0; }
+  if (lv(raw['sfx'])) out.sfx = raw['sfx'];
+  if (lv(raw['music'])) out.music = raw['music'];
   const tu = raw['tutorial'];
   if (isObj(tu)) {
     const taps = tu['taps'];
@@ -122,6 +131,6 @@ export function writeSave(store: KeyValueStore | null, d: SaveData): boolean {
 }
 
 /** 進行状況を消す(音の設定だけは残す)。成功したら true(失敗しても例外は外に出さない) */
-export function resetSave(store: KeyValueStore | null, muted: boolean): boolean {
-  return writeSave(store, { ...emptySave(), muted });
+export function resetSave(store: KeyValueStore | null, sound: { sfx: number; music: number }): boolean {
+  return writeSave(store, { ...emptySave(), sfx: sound.sfx, music: sound.music, muted: sound.sfx === 0 && sound.music === 0 });
 }

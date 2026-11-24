@@ -189,3 +189,27 @@ export const RESET_YES: Rect = { x: 520, y: 290, w: 80, h: 80 };
 
 /** 消音ボタン(右のパネルの右上。どの画面でも押せる) */
 export const MUTE_BUTTON: Rect = { x: 900, y: 20, w: 36, h: 36 };
+
+/**
+ * 音量の窓(消音ボタンを押すと開く。2026-11-24)。上段=BGM、下段=効果音。
+ * 各段に 無(×)・小・中・大 の4つのボタン(文字なし。棒の高さで大きさを見せる)。
+ */
+export const VOLUME_PANEL: Rect = { x: 700, y: 62, w: 244, h: 110 };
+export type VolumeRow = 'music' | 'sfx';
+const VOL_ROW_Y: Record<VolumeRow, number> = { music: 72, sfx: 120 };
+/** 段の頭の絵(音符・スピーカー)の場所 */
+export function volumeIconRect(row: VolumeRow): Rect {
+  return { x: 708, y: VOL_ROW_Y[row], w: 40, h: 40 };
+}
+/** 段階のボタン(level 0=無 … 3=大)の場所 */
+export function volumeLevelRect(row: VolumeRow, level: number): Rect {
+  return { x: 756 + level * 46, y: VOL_ROW_Y[row], w: 40, h: 40 };
+}
+/** 音量の窓の中のどこを押したか。窓の外なら null */
+export function volumeHit(x: number, y: number): { row: VolumeRow; level: 0 | 1 | 2 | 3 } | 'panel' | null {
+  if (!inRect(VOLUME_PANEL, x, y)) return null;
+  for (const row of ['music', 'sfx'] as const) {
+    for (const level of [0, 1, 2, 3] as const) if (inRect(volumeLevelRect(row, level), x, y)) return { row, level };
+  }
+  return 'panel';
+}

@@ -56,3 +56,19 @@ describe('BGM', () => {
     expect(() => { p.setMusic(true); p.setMusic(false); }).not.toThrow();
   });
 });
+
+describe('音量の段階', () => {
+  it('段階の倍率は 無=0 < 小 < 中 < 大=1。段階の判定', async () => {
+    const { LEVEL_GAIN, isVolumeLevel, SoundPlayer } = await import('../src/platform/audio.ts');
+    expect(LEVEL_GAIN[0]).toBe(0);
+    expect(LEVEL_GAIN[3]).toBe(1);
+    for (let i = 1; i < 4; i++) expect(LEVEL_GAIN[i]!).toBeGreaterThan(LEVEL_GAIN[i - 1]!);
+    expect([0, 1, 2, 3].every(isVolumeLevel)).toBe(true);
+    expect([4, -1, 1.5, '2', null].some(isVolumeLevel)).toBe(false);
+    const p = new SoundPlayer();
+    expect([p.sfxLevel, p.musicLevel, p.muted]).toEqual([3, 2, false]);
+    p.sfxLevel = 0; p.musicLevel = 0;
+    expect(p.muted).toBe(true);
+  });
+});
+

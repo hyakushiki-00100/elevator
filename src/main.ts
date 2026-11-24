@@ -6,7 +6,7 @@ import { CARD_ORDER, type CardId } from './sim/rules.ts';
 import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './render/render.ts';
 import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
-  editorHit, hitTest, inRect, makeLayout, makeView, MUTE_BUTTON, RETRY_BUTTON, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
+  editorHit, hitTest, inRect, makeLayout, makeView, MUTE_BUTTON, RETRY_BUTTON, volumeHit, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
   RESET_BUTTON, RESET_YES,
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
@@ -20,7 +20,7 @@ import { browserStore, loadSave, resetSave, SAVE_VERSION, writeSave, type SaveDa
 import { decodeShare, encodeShare } from './share/codec.ts';
 import { applyShared } from './share/apply.ts';
 import { isShareDialogOpen, openShareDialog, type Feedback } from './ui/shareDialog.ts';
-import { SoundPlayer, type Sfx } from './platform/audio.ts';
+import { isVolumeLevel, SoundPlayer, type Sfx } from './platform/audio.ts';
 import { setTheme, theme } from './render/theme.ts';
 
 /**
@@ -53,6 +53,8 @@ const store = browserStore();
 let tutorial = { taps: 0, placed: false };
 /** 進行状況を消す前の確かめの窓を出しているか */
 let confirmReset = false;
+/** 音量の窓を開いているか */
+let volumeOpen = false;
 const sound = new SoundPlayer();
 /** 検証用: 鳴らした効果音の記録(開発サーバーと撮影用ビルドだけ) */
 const soundLog: Sfx[] = [];
@@ -84,7 +86,8 @@ let saving = true;
     });
     const last = STAGES.findIndex((s) => s.id === saved.lastStage);
     if (last >= 0 && last < stagesOpen(unlocked, STAGES)) stageIdx = last;
-    sound.muted = saved.muted;
+    sound.sfxLevel = isVolumeLevel(saved.sfx) ? saved.sfx : 3;
+    sound.musicLevel = isVolumeLevel(saved.music) ? saved.music : 2;
     tutorial = { ...saved.tutorial };
   }
 }
@@ -109,6 +112,7 @@ function persist(lastIdx: number = stageIdx): void {
   if (!saving) return;
   const data: SaveData = {
     version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id, muted: sound.muted,
+    sfx: sound.sfxLevel, music: sound.musicLevel,
     tutorial: { ...tutorial },
   };
   STAGES.forEach((s, i) => {
@@ -311,7 +315,7 @@ function resetProgress(): void {
   drag = null;
   previewCard = null;
   tutorial = { taps: 0, placed: false };
-  if (saving) resetSave(store, sound.muted);
+  if (saving) resetSave(store, { sfx: sound.sfxLevel, music: sound.musicLevel });
   newDay();
 }
 
@@ -448,10 +452,23 @@ canvas.addEventListener('pointerdown', (ev) => {
   sound.unlock();
   const rect = canvas.getBoundingClientRect();
   const p = toLogical(view, ev.clientX - rect.left, ev.clientY - rect.top);
+  // 音量の窓: スピーカーのボタンで開け閉めする。開いている間のタップは窓だけが受け取る(後ろのゲームには届かない)
   if (inRect(MUTE_BUTTON, p.x, p.y)) {
-    sound.muted = !sound.muted;
+    volumeOpen = !volumeOpen;
     sfx('click');
-    persist();
+    return;
+  }
+  if (volumeOpen) {
+    const hit = volumeHit(p.x, p.y);
+    if (hit === null) {
+      volumeOpen = false;
+    } else if (hit !== 'panel') {
+      if (hit.row === 'sfx') sound.sfxLevel = hit.level;
+      else sound.musicLevel = hit.level;
+      // 効果音の段を変えたときは、その大きさで確かめの音を鳴らす
+      sfx('click');
+      persist();
+    }
     return;
   }
   if (mode === 'ready') {
@@ -601,6 +618,7 @@ function frame(now: number): void {
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentLayout(), editRow, newCards,
     stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
+    sfxLevel: sound.sfxLevel, musicLevel: sound.musicLevel, volumeOpen,
     drag: drag && drag.moved ? { card: drag.card, x: drag.x, y: drag.y, from: drag.from, target: dropTarget(drag) } : null,
     previewCard: drag?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,
     stageShapes: STAGES.map((s) => ({ floors: s.building.floors, elevators: s.building.elevators })),
