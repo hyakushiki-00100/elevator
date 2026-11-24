@@ -7,7 +7,7 @@ import { draw, EFFECT_MS, type DayResult, type Effect, type Mode } from './rende
 import { rateRules, RATING_DAYS } from './sim/evaluate.ts';
 import {
   editorHit, hitTest, inRect, makeLayout, makeView, MUTE_BUTTON, RETRY_BUTTON, volumeHit, shareButtonHit, stageTabHit, toLogical, type Layout, type View,
-  RESET_BUTTON, RESET_YES,
+  RESET_BUTTON, RESET_YES, PAD_BUTTON, PAD_MUTE,
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
@@ -336,7 +336,7 @@ function onReadyTap(x: number, y: number): void {
     } else sfx('click');
     return;
   }
-  if (inRect(RESET_BUTTON, x, y)) {
+  if (inRect(RESET_BUTTON, x, y, PAD_BUTTON)) {
     sfx('click');
     drag = null;
     confirmReset = true;
@@ -453,7 +453,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const rect = canvas.getBoundingClientRect();
   const p = toLogical(view, ev.clientX - rect.left, ev.clientY - rect.top);
   // 音量の窓: スピーカーのボタンで開け閉めする。開いている間のタップは窓だけが受け取る(後ろのゲームには届かない)
-  if (inRect(MUTE_BUTTON, p.x, p.y)) {
+  if (inRect(MUTE_BUTTON, p.x, p.y, PAD_MUTE)) {
     volumeOpen = !volumeOpen;
     sfx('click');
     return;

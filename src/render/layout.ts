@@ -83,9 +83,23 @@ export const RETRY_BUTTON: Rect = { x: 480 - 44, y: 470 - 24 - 88, w: 88, h: 88 
 export const START_BUTTON: Rect = { x: 640, y: 210, w: 120, h: 120 };
 export const START_DEMO: Rect = { x: 150, y: 100, w: 400, h: 340 };
 
-export function inRect(r: Rect, x: number, y: number): boolean {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+export function inRect(r: Rect, x: number, y: number, pad = 0): boolean {
+  return x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
 }
+
+// ---- 押せる範囲の広げ幅(2026-11-24)----
+// スマホの横向き(例: iPhone の 844x390)では論理座標の 1 が約 0.72px になり、48 のボタンは約 35px、36 の消音ボタンは約 26px。
+// 指で押す目安(Apple の指針で 44pt)より小さいので、見た目は変えずに、押せる範囲だけを隣とぶつからない幅で広げる。
+/** 消音ボタン(周りに押せる物がない) */
+export const PAD_MUTE = 12;
+/** 最下段の小さなボタン(共有・ごみ箱。隣との間が 12 → 半分の 6) */
+export const PAD_BUTTON = 6;
+/** ステージの選択(間が 8 → 4) */
+export const PAD_TAB = 4;
+/** カードの枠と手持ち(間が 18 → 9) */
+export const PAD_CARD = 9;
+/** 音量の窓の段階のボタン(間が 6 → 3) */
+export const PAD_VOLUME = 3;
 
 /** 実画面(css px)→論理座標への変換 */
 export interface View {
@@ -152,10 +166,10 @@ export type EditorHit =
 export function editorHit(x: number, y: number, rows: number, slotCount: number, handCount: number): EditorHit {
   if (inRect(EDITOR_PLAY, x, y)) return { kind: 'play' };
   for (let r = 0; r < rows; r++) {
-    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i), x, y)) return { kind: 'slot', row: r, index: i };
+    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i), x, y, PAD_CARD)) return { kind: 'slot', row: r, index: i };
     if (inRect(rowButtonRect(r), x, y)) return { kind: 'row', row: r };
   }
-  for (let i = 0; i < handCount; i++) if (inRect(handRect(i), x, y)) return { kind: 'hand', index: i };
+  for (let i = 0; i < handCount; i++) if (inRect(handRect(i), x, y, PAD_CARD)) return { kind: 'hand', index: i };
   return null;
 }
 
@@ -166,7 +180,7 @@ export function stageTabRect(i: number): Rect {
 
 export function stageTabHit(x: number, y: number, stages: number): number | null {
   if (stages < 2) return null;
-  for (let i = 0; i < stages; i++) if (inRect(stageTabRect(i), x, y)) return i;
+  for (let i = 0; i < stages; i++) if (inRect(stageTabRect(i), x, y, PAD_TAB)) return i;
   return null;
 }
 
@@ -175,8 +189,8 @@ export const SHARE_EXPORT_BUTTON: Rect = { x: 560, y: 454, w: 48, h: 48 };
 export const SHARE_IMPORT_BUTTON: Rect = { x: 620, y: 454, w: 48, h: 48 };
 
 export function shareButtonHit(x: number, y: number): 'export' | 'import' | null {
-  if (inRect(SHARE_EXPORT_BUTTON, x, y)) return 'export';
-  if (inRect(SHARE_IMPORT_BUTTON, x, y)) return 'import';
+  if (inRect(SHARE_EXPORT_BUTTON, x, y, PAD_BUTTON)) return 'export';
+  if (inRect(SHARE_IMPORT_BUTTON, x, y, PAD_BUTTON)) return 'import';
   return null;
 }
 
@@ -209,7 +223,7 @@ export function volumeLevelRect(row: VolumeRow, level: number): Rect {
 export function volumeHit(x: number, y: number): { row: VolumeRow; level: 0 | 1 | 2 | 3 } | 'panel' | null {
   if (!inRect(VOLUME_PANEL, x, y)) return null;
   for (const row of ['music', 'sfx'] as const) {
-    for (const level of [0, 1, 2, 3] as const) if (inRect(volumeLevelRect(row, level), x, y)) return { row, level };
+    for (const level of [0, 1, 2, 3] as const) if (inRect(volumeLevelRect(row, level), x, y, PAD_VOLUME)) return { row, level };
   }
   return 'panel';
 }
