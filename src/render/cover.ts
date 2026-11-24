@@ -15,7 +15,8 @@ interface Box { x: number; y: number; w: number; h: number }
 function layout(kind: CoverKind, W: number, H: number): { title: Box; building: Box; cards: Box } {
   if (kind === 'landscape') {
     return {
-      building: { x: W * 0.06, y: H * 0.1, w: W * 0.42, h: H * 0.82 },
+      // 左上の約40%x20%は CrazyGames の札(label zone)が重なるので、建物を下げる
+      building: { x: W * 0.06, y: H * 0.23, w: W * 0.42, h: H * 0.72 },
       title: { x: W * 0.52, y: H * 0.12, w: W * 0.44, h: H * 0.42 },
       cards: { x: W * 0.55, y: H * 0.56, w: W * 0.4, h: H * 0.36 },
     };
@@ -23,9 +24,10 @@ function layout(kind: CoverKind, W: number, H: number): { title: Box; building: 
   if (kind === 'portrait') {
     // 縦長: 上にタイトル、真ん中に建物、下にカードを横一列(建物のかごを隠さない)
     return {
-      title: { x: W * 0.06, y: H * 0.03, w: W * 0.88, h: H * 0.12 },
-      building: { x: W * 0.1, y: H * 0.16, w: W * 0.8, h: H * 0.56 },
-      cards: { x: W * 0.06, y: H * 0.74, w: W * 0.88, h: H * 0.24 },
+      // 左上の約40%x10%は札が重なるので、タイトルをその下へ
+      title: { x: W * 0.06, y: H * 0.115, w: W * 0.88, h: H * 0.1 },
+      building: { x: W * 0.1, y: H * 0.235, w: W * 0.8, h: H * 0.5 },
+      cards: { x: W * 0.06, y: H * 0.75, w: W * 0.88, h: H * 0.23 },
     };
   }
   if (kind === 'itch') {
@@ -36,10 +38,11 @@ function layout(kind: CoverKind, W: number, H: number): { title: Box; building: 
       cards: { x: W * 0.53, y: H * 0.36, w: W * 0.44, h: H * 0.56 },
     };
   }
+  // 正方形: 左上の約35%x30%は札が重なるので、建物を右上、カードを左(札の下)、タイトルを下に
   return {
-    title: { x: W * 0.06, y: H * 0.04, w: W * 0.88, h: H * 0.26 },
-    building: { x: W * 0.06, y: H * 0.33, w: W * 0.5, h: H * 0.62 },
-    cards: { x: W * 0.52, y: H * 0.45, w: W * 0.44, h: H * 0.45 },
+    building: { x: W * 0.5, y: H * 0.05, w: W * 0.45, h: H * 0.66 },
+    cards: { x: W * 0.03, y: H * 0.34, w: W * 0.46, h: H * 0.37 },
+    title: { x: W * 0.05, y: H * 0.76, w: W * 0.9, h: H * 0.2 },
   };
 }
 

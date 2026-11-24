@@ -314,7 +314,7 @@ out/              ← スクリーンショットとbalance.csv(gitに入れな�
 - **ビルドは相対パス**(`vite.config.ts` の `base: './'`)。CrazyGames は相対パスだけを許す(requirements/technical)。以前は `/assets/...` の絶対パスで、公開先では読み込めない可能性が高かった。ZIP をフォルダの奥に置いても動くことを確認した。
 - `index.html`:タイトル `Rule the Lift`、`lang="en"`、body に選択・長押しの表示を出さない CSS(CrazyGames の技術要件)。
 - `npm run package`:`out/release/` に itch.io 用(広告なし)と CrazyGames 用(SDK 版)の ZIP を作る。ZIP の一番上に index.html(itch.io の決まり)。
-- `npm run promo`:`out/promo/` に表紙の画像3枚(1920×1080 / 800×1200 / 800×800、文字はタイトルだけ)と紹介動画2本(横 1920×1080 / 縦 1080×1620、18秒、音なし、最初の1秒は表紙)を作る。表紙は `render/cover.ts`(撮影専用ビルドの `?cover=landscape|portrait|square` で描く。本番では使わない)。動画はステージ2を録画し、縦長は建物の部分を切り出す。ffmpeg(H.264)が必要。
+- `npm run promo`:`out/promo/` に表紙の画像3枚(1920×1080 / 800×1200 / 800×800、文字はタイトルだけ)と紹介動画2本(横 1920×1080 / 縦 1080×1620、18秒、音なし、最初の1秒は表紙)を作る。**CrazyGames は表紙の左上に札(label zone、横長 約40%×20%・縦長 約40%×10%・正方形 約35%×30%、2026-11-24 に投稿画面で測った)を重ねるので、そこには何も置かない。** 表紙は `render/cover.ts`(撮影専用ビルドの `?cover=landscape|portrait|square` で描く。本番では使わない)。動画はステージ2を録画し、縦長は建物の部分を切り出す。ffmpeg(H.264)が必要。
 - **公開の進み具合(2026-11-24)**:itch.io に下書き(Draft)で登録済み(`https://hyakushiki00100.itch.io/rule-the-lift`)。音量の窓を入れた版に差し替え済み。ユーザーが iPhone(効果音・BGM が鳴る)と PC で動作を確認。生成AIの使用は申告する方針(Code・Graphics・Sounds)。**2026-11-24 itch.io で Public にして公開した**(ユーザー)。次は CrazyGames に投稿(Developer Portal のアカウント作成済み)。
 - CrazyGames の決まり(公式の説明で確認):英語に対応(本作は文字なしでタイトルのみ)/独自の全画面ボタンは禁止(本作にはない)/表紙・動画の決まり/読みやすさは 800×450(スマホ)〜1920×1080 の枠で確認される。
 
