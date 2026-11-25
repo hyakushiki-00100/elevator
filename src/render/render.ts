@@ -1513,20 +1513,50 @@ function drawResult(
 ): void {
   dim(ctx);
   const p = RESULT_PANEL;
+  // 窓は少し小さい所から、ふわっと出る(2026-11-25 見た目の手直しc)
+  const pop = Math.min(1, sinceMs / 220);
+  const ps = 0.92 + 0.08 * (1 - (1 - pop) * (1 - pop));
+  ctx.save();
+  ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+  ctx.scale(ps, ps);
+  ctx.translate(-(p.x + p.w / 2), -(p.y + p.h / 2));
   ctx.fillStyle = T().dialogBg;
   roundRect(ctx, p.x, p.y, p.w, p.h, 14);
   ctx.fill();
   const cx = p.x + p.w / 2;
 
-  // 星: 1つずつ順に現れる
+  // 星: 1つずつ上から落ちてきて、着いたところで光の粒がはじける
   for (let i = 0; i < 3; i++) {
-    const appear = Math.max(0, Math.min(1, (sinceMs - 250 - i * 300) / 250));
+    const t0 = 250 + i * 300;
+    const appear = Math.max(0, Math.min(1, (sinceMs - t0) / 250));
     const filled = res.stars > i && appear > 0;
-    const scale = filled ? 0.6 + 0.4 * appear + 0.15 * Math.sin(Math.PI * appear) : 1;
-    iconStar(ctx, cx + (i - 1) * 84, p.y + 70 + (i === 1 ? -10 : 0), 32 * scale, filled);
+    const sx = cx + (i - 1) * 84, sy = p.y + 70 + (i === 1 ? -10 : 0);
+    if (!filled) { iconStar(ctx, sx, sy, 32, false); continue; }
+    const drop = (1 - appear) * (1 - appear) * 70;
+    const scale = 0.6 + 0.4 * appear + 0.15 * Math.sin(Math.PI * appear);
+    ctx.save();
+    ctx.translate(sx, sy - drop);
+    ctx.rotate((1 - appear) * 0.9);
+    iconStar(ctx, 0, 0, 32 * scale, true);
+    ctx.restore();
+    // はじける光の粒(着いてから0.5秒)
+    const burst = (sinceMs - t0 - 250) / 500;
+    if (burst > 0 && burst < 1) {
+      ctx.save();
+      ctx.globalAlpha = 1 - burst;
+      ctx.fillStyle = '#ffd34d';
+      for (let k = 0; k < 10; k++) {
+        const ang = (k / 10) * Math.PI * 2 + i;
+        const d = 30 + burst * 34;
+        fillCircle(ctx, sx + Math.cos(ang) * d, sy + Math.sin(ang) * d, 3.5 * (1 - burst) + 1, '#ffd34d');
+      }
+      ctx.restore();
+    }
   }
-  // 正式な点。左に根拠(カレンダー=複数日の平均 / 指=手動を使った日の点)
-  drawNumber(ctx, String(res.score), cx, p.y + 170, 52, T().accent);
+  // 正式な点(0から数え上がる)。左に根拠(カレンダー=複数日の平均 / 指=手動を使った日の点)
+  const count = Math.max(0, Math.min(1, (sinceMs - 150) / 900));
+  const shown = Math.round(res.score * (1 - (1 - count) * (1 - count) * (1 - count)));
+  drawNumber(ctx, String(shown), cx, p.y + 170, 52, T().accent);
   if (res.basis === 'rated') {
     iconCalendar(ctx, cx - 125, p.y + 152, 20, res.days);
     // 右に、画面で見た日の点(カレンダー「1」)
@@ -1568,4 +1598,33 @@ function drawResult(
       ctx.fillRect(x + w - 1.5, y - 6, 3, 12);
     }
   });
+  ctx.restore();
+  // 紙吹雪(星が1つ以上: 少し、3つ: たくさん)。乱数は使わず、番号から位置と色を決める
+  if (res.stars > 0) drawConfetti(ctx, sinceMs - 250 - (res.stars - 1) * 300, res.stars === 3 ? 70 : 24);
+}
+
+/** 紙吹雪: 画面の上から降る(t: 始まってからの ms、n: 枚数)。2.4秒で消える */
+function drawConfetti(ctx: CanvasRenderingContext2D, t: number, n: number): void {
+  if (t < 0 || t > 2400) return;
+  const colors = ['#ffd34d', '#4fc3f7', '#f06292', '#aed581', '#ff9a2e', '#ba68c8'];
+  const hash = (k: number): number => {
+    const x = Math.sin(k * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  ctx.save();
+  ctx.globalAlpha = t > 1800 ? 1 - (t - 1800) / 600 : 1;
+  for (let k = 0; k < n; k++) {
+    const x0 = hash(k) * LOGICAL_W;
+    const speed = 180 + hash(k + 99) * 220;
+    const y = -20 + (t / 1000) * speed + hash(k + 7) * -120;
+    if (y < -10 || y > LOGICAL_H + 10) continue;
+    const x = x0 + Math.sin(t / 300 + k) * 18;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t / 200 + k);
+    ctx.fillStyle = colors[k % colors.length]!;
+    ctx.fillRect(-4, -2.5, 8, 5);
+    ctx.restore();
+  }
+  ctx.restore();
 }
