@@ -81,7 +81,7 @@
 **Long:**
 Passengers walk in, the floors fill up, and the elevators can't keep up.
 At first you tap floors to send the car. As the building gets busier, you collect rule cards — "nearest call", "same direction first", "express to the lobby", "low/high zone", "no bulky luggage" — and stack them to automate each elevator.
-8 buildings, up to 3 elevators and 10 floors: an office with morning and evening rushes, a department store where everyone comes from the lobby, a hotel with two separate crowds — plus people in a hurry, tour groups and shoppers with luggage that take up more room. No rule wins everywhere.
+12 buildings, up to 3 elevators and 10 floors: an office with morning and evening rushes, a department store where everyone comes from the lobby, a hotel with two separate crowds — plus people in a hurry, tour groups and shoppers with luggage that take up more room. No rule wins everywhere.
 Earn stars to open new buildings. Score is the average of 20 simulated days, so the best rules really are the best. Share your rule code and anyone can reproduce your score.
 No text, no account — just numbers, colors and icons.
 
@@ -90,6 +90,6 @@ No text, no account — just numbers, colors and icons.
 ### 日本語(itch.io などに添える)
 乗客が歩いてやって来て、各階に行列ができていく。最初は階をタップしてエレベーターを動かすけれど、すぐに手が回らなくなる。
 集めた「運行ルール」のカード(近い呼び出しへ/同じ方向を優先/空なら急行で1階へ/下層・上層の担当/大荷物お断り)を並べて、エレベーターを自動で動かそう。
-建物は8つ、エレベーターは最大3基・10階建て。朝夕にラッシュがあるオフィス、1日中1階から人が来るデパート、上と下の2つの集団が動くホテル。急いでいる人、団体客、場所を取る荷物持ちもやって来る。建物ごとに人の流れが違い、万能のルールはない。
+建物は12、エレベーターは最大3基・10階建て。朝夕にラッシュがあるオフィス、1日中1階から人が来るデパート、上と下の2つの集団が動くホテル。急いでいる人、団体客、場所を取る荷物持ちもやって来る。建物ごとに人の流れが違い、万能のルールはない。
 星を集めると新しい建物が開く。点数は20日分の平均なので、強いルールは本当に強い。ルールを短い文字列で共有すれば、誰でも同じ点数を確かめられる。
 文字なし、登録なし。数字と色とアイコンだけで遊べる。

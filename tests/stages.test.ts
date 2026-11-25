@@ -161,6 +161,17 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, [['express', 'nearest'], ['zoneHigh', 'express', 'nearest']]).stars).toBeLessThan(3);
   });
 
+  it('ステージ11・12(10階・3基、荷物持ち): 「大荷物お断り」と「担当範囲」の両方で3★。片方だけの最良では届かない', () => {
+    const s11 = STAGES[10]!;
+    expect(rateRules(s11, [['zoneLow', 'nearest'], ['noBulky', 'zoneLow', 'nearest'], ['noBulky', 'zoneHigh', 'nearest']]).stars).toBe(3);
+    expect(rateRules(s11, [['nearest'], ['nearest'], ['nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(s11, [['express', 'nearest'], ['noBulky', 'sameDir', 'nearest'], ['noBulky', 'express', 'nearest']]).stars).toBeLessThan(3);
+    const s12 = STAGES[11]!;
+    expect(rateRules(s12, [['nearest'], ['zoneHigh', 'sameDir', 'nearest'], ['noBulky', 'zoneLow', 'sameDir', 'nearest']]).stars).toBe(3);
+    expect(rateRules(s12, [['nearest'], ['sameDir', 'nearest'], ['zoneLow', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(s12, [['nearest'], ['sameDir', 'nearest'], ['noBulky', 'sameDir', 'nearest']]).stars).toBeLessThan(3);
+  });
+
   it('ステージ8(10階・3基): 「急行」と「担当範囲」の両方を使うと3★。片方だけの最良では届かない', () => {
     const st = STAGES[7]!;
     expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['zoneLow', 'express', 'nearest'], ['express', 'sameDir', 'nearest']]).stars).toBe(3);
