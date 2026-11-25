@@ -92,10 +92,10 @@ export function inRect(r: Rect, x: number, y: number, pad = 0): boolean {
 // 指で押す目安(Apple の指針で 44pt)より小さいので、見た目は変えずに、押せる範囲だけを隣とぶつからない幅で広げる。
 /** 消音ボタン(周りに押せる物がない) */
 export const PAD_MUTE = 12;
-/** 最下段の小さなボタン(共有・ごみ箱。隣との間が 12 → 半分の 6) */
-export const PAD_BUTTON = 6;
-/** ステージの選択(間が 8 → 4) */
-export const PAD_TAB = 4;
+/** 最下段の小さなボタン(共有・ごみ箱。隣との間が 6 → 半分の 3。2026-11-25 ステージを12に増やして詰めた) */
+export const PAD_BUTTON = 3;
+/** ステージの選択(間が 4 → 2) */
+export const PAD_TAB = 2;
 /** カードの枠と手持ち(間が 18 → 9) */
 export const PAD_CARD = 9;
 /** 手持ちが6枚以上のとき(間が 9 → 4) */
@@ -189,8 +189,9 @@ export function editorHit(x: number, y: number, rows: number, slotCount: number,
 }
 
 /** ステージの選択ボタン(最下段の左) */
+// 12ステージ+次のステージ(星で開く)の13個が、共有のボタンの左に収まるよう、幅40・間隔44(2026-11-25 ステージ9〜12を追加)
 export function stageTabRect(i: number): Rect {
-  return { x: 36 + i * 58, y: 452, w: 50, h: 52 };
+  return { x: 36 + i * 44, y: 452, w: 40, h: 52 };
 }
 
 export function stageTabHit(x: number, y: number, stages: number): number | null {
@@ -200,8 +201,8 @@ export function stageTabHit(x: number, y: number, stages: number): number | null
 }
 
 /** ルールの共有ボタン(最下段の中ほど) */
-export const SHARE_EXPORT_BUTTON: Rect = { x: 560, y: 454, w: 48, h: 48 };
-export const SHARE_IMPORT_BUTTON: Rect = { x: 620, y: 454, w: 48, h: 48 };
+export const SHARE_EXPORT_BUTTON: Rect = { x: 616, y: 454, w: 44, h: 48 };
+export const SHARE_IMPORT_BUTTON: Rect = { x: 666, y: 454, w: 44, h: 48 };
 
 export function shareButtonHit(x: number, y: number): 'export' | 'import' | null {
   if (inRect(SHARE_EXPORT_BUTTON, x, y, PAD_BUTTON)) return 'export';
@@ -210,7 +211,7 @@ export function shareButtonHit(x: number, y: number): 'export' | 'import' | null
 }
 
 /** 進行状況を消すボタン(最下段、共有ボタンと開始ボタンの間。ごみ箱の絵) */
-export const RESET_BUTTON: Rect = { x: 740, y: 454, w: 48, h: 48 };
+export const RESET_BUTTON: Rect = { x: 726, y: 454, w: 44, h: 48 };
 /** 消す前の確かめの窓と、その中の「やめる」「消す」ボタン */
 export const RESET_PANEL: Rect = { x: 330, y: 150, w: 300, h: 240 };
 export const RESET_NO: Rect = { x: 360, y: 290, w: 80, h: 80 };

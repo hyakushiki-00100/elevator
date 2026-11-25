@@ -217,4 +217,86 @@ export const STAGES: readonly Stage[] = [
     starsNeeded: 15,
     look: 'office',
   },
+  // ---- ステージ9〜12(2026-11-25 追加、ユーザーの依頼「ステージ数も増やす」)----
+  {
+    id: 9,
+    seed: 1006,
+    // 9階・2基のホテル。ほとんどが下の階どうし・上の階どうしの移動で、10人に3人が荷物持ち
+    building: makeBuilding({ floors: 9, elevators: 2, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.016, rateEnd: 0.022, local: 0.9, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.016, rateEnd: 0.022, local: 0.9, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.016, rateEnd: 0.022, local: 0.9, luggageShare: 0.3 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 20日平均(seed 1006、2026-11-25): 手動相当 上級者 5245 / 初心者 4047
+    //   全576通り: 1位 [上層,近い]/[下層,近い] 5992 / 担当範囲なしの最良 5156(−14%) / お断りありの最良 5507
+    // 3★: 下層・上層に分ける考え方(ステージ4と同じ)。荷物持ちがいても「大荷物お断り」は要らない(置くと下がる)
+    stars: [2000, 4000, 5800],
+    opensAt: 5,
+    starsNeeded: 17,
+    look: 'hotel',
+  },
+  {
+    id: 10,
+    seed: 1032,
+    // 8階・2基のデパート。1日中、1階から上へ向かう人が多く、10人に3人が荷物持ち
+    building: makeBuilding({ floors: 8, elevators: 2, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.014, rateEnd: 0.02, fromGround: 0.85, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.014, rateEnd: 0.02, fromGround: 0.85, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.014, rateEnd: 0.02, fromGround: 0.85, luggageShare: 0.3 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 20日平均(seed 1032、2026-11-25): 手動相当 上級者 3695 / 初心者 3356
+    //   全576通り: 1位 [上層,急行,同方向,近い]/[お断り,急行,近い] 4626 / 担当範囲なしの最良 4543(−1.8%)
+    //   「大荷物お断り」なしの最良 4231(−8.5%) / 両方お断りの最良 4276
+    // 3★: 「大荷物お断り」と「担当範囲」の両方を使う考え方が必要(担当範囲の差は小さい)
+    stars: [1700, 3350, 4555],
+    opensAt: 5,
+    starsNeeded: 20,
+    look: 'department',
+  },
+  {
+    id: 11,
+    seed: 1007,
+    // 10階・3基のオフィス。朝夕のラッシュに、5人に1人の荷物持ちがまじる
+    building: makeBuilding({ floors: 10, elevators: 3, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.022, rateEnd: 0.034, fromGround: 0.8, luggageShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.022, rateEnd: 0.03, local: 0.4, luggageShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.024, rateEnd: 0.036, toGround: 0.75, luggageShare: 0.2 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 暫定(2026-11-25、全組み合わせの確認の途中): 手動相当 初心者 5435 / 上級者 6809
+    stars: [2700, 5400, 7800],
+    opensAt: 5,
+    starsNeeded: 23,
+    look: 'office',
+  },
+  {
+    id: 12,
+    seed: 1035,
+    // 10階・3基のホテル。下の階どうし・上の階どうしの移動が多く、ロビー(1階)との行き来もある。5人に1人が荷物持ち
+    building: makeBuilding({ floors: 10, elevators: 3, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.026, rateEnd: 0.035, local: 0.6, fromGround: 0.25, luggageShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.026, rateEnd: 0.035, local: 0.6, fromGround: 0.25, luggageShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.026, rateEnd: 0.035, local: 0.6, toGround: 0.25, luggageShare: 0.2 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 暫定(2026-11-25、全組み合わせの確認の途中): 手動相当 初心者 7327 / 上級者 8091
+    stars: [3600, 7300, 9200],
+    opensAt: 5,
+    starsNeeded: 26,
+    look: 'hotel',
+  },
 ];

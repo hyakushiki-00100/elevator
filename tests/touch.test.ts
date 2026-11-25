@@ -15,7 +15,7 @@ describe('押せる範囲の広げ幅', () => {
       ['play', EDITOR_PLAY], ['export', grow(SHARE_EXPORT_BUTTON, PAD_BUTTON)], ['import', grow(SHARE_IMPORT_BUTTON, PAD_BUTTON)],
       ['reset', grow(RESET_BUTTON, PAD_BUTTON)], ['mute', grow(MUTE_BUTTON, PAD_MUTE)],
     ];
-    for (let i = 0; i < 4; i++) items.push([`tab${i}`, grow(stageTabRect(i), PAD_TAB)]);
+    for (let i = 0; i < 13; i++) items.push([`tab${i}`, grow(stageTabRect(i), PAD_TAB)]);
     for (let r = 0; r < 2; r++) {
       items.push([`row${r}`, rowButtonRect(r)]);
       for (let i = 0; i < 5; i++) items.push([`slot${r}-${i}`, grow(slotRect(r, i), PAD_CARD)]);
@@ -71,10 +71,10 @@ describe('押せる範囲の広げ幅', () => {
     expect(editorHit(s.x - 8, s.y + 10, 1, 3, 3)).toEqual({ kind: 'slot', row: 0, index: 1 });
     const h = handRect(0);
     expect(editorHit(h.x + 10, h.y + h.h + 8, 1, 3, 3)).toEqual({ kind: 'hand', index: 0 });
-    expect(shareButtonHit(SHARE_EXPORT_BUTTON.x - 5, SHARE_EXPORT_BUTTON.y + 5)).toBe('export');
-    expect(shareButtonHit(SHARE_IMPORT_BUTTON.x + SHARE_IMPORT_BUTTON.w + 5, SHARE_IMPORT_BUTTON.y)).toBe('import');
+    expect(shareButtonHit(SHARE_EXPORT_BUTTON.x - 2, SHARE_EXPORT_BUTTON.y + 5)).toBe('export');
+    expect(shareButtonHit(SHARE_IMPORT_BUTTON.x + SHARE_IMPORT_BUTTON.w + 2, SHARE_IMPORT_BUTTON.y)).toBe('import');
     const t = stageTabRect(2);
-    expect(stageTabHit(t.x - 3, t.y, 4)).toBe(2);
+    expect(stageTabHit(t.x - 1, t.y, 4)).toBe(2);
     const v = volumeLevelRect('sfx', 3);
     expect(volumeHit(v.x + v.w + 2, v.y + 2)).toEqual({ row: 'sfx', level: 3 });
     // 広げ幅より外は押していない扱い

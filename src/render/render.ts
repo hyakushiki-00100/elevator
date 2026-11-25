@@ -1148,9 +1148,9 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
       ctx.fill();
       if (shape) {
         const fg = i === a.stageIdx ? '#1a1a1a' : T().text;
-        drawBuildingIcon(ctx, r.x + 12, r.y + 5, r.w - 24, 30, shape.floors, shape.elevators, ELEVATOR_COLORS, fg);
+        drawBuildingIcon(ctx, r.x + 7, r.y + 5, r.w - 14, 30, shape.floors, shape.elevators, ELEVATOR_COLORS, fg);
       }
-      for (let k = 0; k < 3; k++) iconStar(ctx, r.x + r.w / 2 + (k - 1) * 13, r.y + 44, 5, (a.bestStars[i] ?? 0) > k);
+      for (let k = 0; k < 3; k++) iconStar(ctx, r.x + r.w / 2 + (k - 1) * 11, r.y + 44, 4.5, (a.bestStars[i] ?? 0) > k);
     }
     // 次のステージ(星の合計で開く): 暗いボタンに、必要な星の数と、今の合計までの進み具合の棒(2026-11-25)
     if (a.starGate !== null && a.stagesOpen < a.stageShapes.length) {
@@ -1160,15 +1160,15 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
       roundRect(ctx, r.x, r.y, r.w, r.h, 6);
       ctx.fill();
       ctx.globalAlpha = 1;
-      iconStar(ctx, r.x + 13, r.y + 18, 8, true);
-      drawNumber(ctx, String(a.starGate), r.x + r.w - 6, r.y + 27, 16, T().text, 'right');
+      iconStar(ctx, r.x + r.w / 2, r.y + 12, 7, true);
+      drawNumber(ctx, String(a.starGate), r.x + r.w / 2, r.y + 36, 14, T().text);
       const bw = r.w - 12;
       const frac = Math.max(0, Math.min(1, a.totalStars / a.starGate));
       ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      roundRect(ctx, r.x + 6, r.y + 38, bw, 6, 3);
+      roundRect(ctx, r.x + 6, r.y + 42, bw, 5, 2.5);
       ctx.fill();
       ctx.fillStyle = '#ffd34d';
-      roundRect(ctx, r.x + 6, r.y + 38, Math.max(6, bw * frac), 6, 3);
+      roundRect(ctx, r.x + 6, r.y + 42, Math.max(5, bw * frac), 5, 2.5);
       ctx.fill();
     }
   }

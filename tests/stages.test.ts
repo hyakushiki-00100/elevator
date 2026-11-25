@@ -145,6 +145,22 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, both(['noBulky', 'nearest'])).stars).toBeLessThan(3);
   });
 
+  it('ステージ9(9階・2基のホテル、荷物持ち): 下層・上層に分けると3★。分けないと届かない', () => {
+    const st = STAGES[8]!;
+    expect(rateRules(st, [['zoneHigh', 'nearest'], ['zoneLow', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, both(['nearest'])).stars).toBeLessThan(3);
+    expect(rateRules(st, [['zoneHigh', 'nearest'], ['noBulky', 'zoneLow', 'nearest']]).stars).toBeLessThan(3);
+  });
+
+  it('ステージ10(8階・2基のデパート、荷物持ち): 「大荷物お断り」と「担当範囲」の両方で3★。片方だけでは届かない', () => {
+    const st = STAGES[9]!;
+    expect(rateRules(st, [['zoneHigh', 'express', 'sameDir', 'nearest'], ['noBulky', 'express', 'nearest']]).stars).toBe(3);
+    // 全組み合わせの確認で見つけた、担当範囲なしの最良・お断りなしの最良
+    expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['noBulky', 'express', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, [['express', 'nearest'], ['zoneHigh', 'express', 'nearest']]).stars).toBeLessThan(3);
+  });
+
   it('ステージ8(10階・3基): 「急行」と「担当範囲」の両方を使うと3★。片方だけの最良では届かない', () => {
     const st = STAGES[7]!;
     expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['zoneLow', 'express', 'nearest'], ['express', 'sameDir', 'nearest']]).stars).toBe(3);
