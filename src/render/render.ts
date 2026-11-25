@@ -1197,8 +1197,9 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
 
   // 引っ張っているカード(指に付いてくる。一番上に描く)
   if (a.drag) {
-    const w = CARD_W * 1.1;
-    const h = CARD_H * 1.1;
+    // 指で隠れても絵が見えるよう、持ち上げたカードは大きく(1.1 → 1.35 倍。2026-11-25 見た目の手直しd)
+    const w = CARD_W * 1.35;
+    const h = CARD_H * 1.35;
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 16;

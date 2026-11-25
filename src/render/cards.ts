@@ -92,7 +92,8 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
   const top = y + 8 * s, bottom = y + h - 8 * s;
   const fh = (bottom - top) / 5;
   const floorMid = (f: number): number => bottom - (f + 0.5) * fh;
-  const shaftX = left + 3 * s, shaftW = 14 * s;
+  // 2026-11-25 見た目の手直しd: スマホでも読めるよう、かご・人・線を太く大きく
+  const shaftX = left + 3 * s, shaftW = 16 * s;
   const base = o.dim ? 0.35 : 1;
 
   // ビルの中(暗い面)と階
@@ -121,16 +122,16 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
   for (const c of sc.calls) {
     if (c.picked && st.pickedGone) continue;
     const cyy = floorMid(c.floor);
-    const cxx = shaftX + shaftW + 9 * s;
-    ctx.globalAlpha = base * st.fade * (c.picked ? 1 : 0.4);
+    const cxx = shaftX + shaftW + 10.5 * s;
+    ctx.globalAlpha = base * st.fade * (c.picked ? 1 : 0.45);
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(cxx, cyy - 0.5 * s, 3.2 * s, 0, Math.PI * 2);
+    ctx.arc(cxx, cyy - 1 * s, 4 * s, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillRect(cxx - 2.6 * s, cyy + 2 * s, 5.2 * s, 2.6 * s);
+    ctx.fillRect(cxx - 3.2 * s, cyy + 2.4 * s, 6.4 * s, 3.4 * s);
     // 団体・荷物持ち: 人の右にスーツケース(取っ手つきの箱)
     if (c.bulky) {
-      const bx = cxx + 4.5 * s, by = cyy - 1 * s;
+      const bx = cxx + 5.5 * s, by = cyy - 1 * s;
       ctx.fillRect(bx, by, 6 * s, 6 * s);
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = Math.max(1, s);
@@ -139,10 +140,10 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
     // 選ばれない人には斜線(無視する・通り過ぎる)
     if (!c.picked) {
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(1.2, 1.4 * s);
+      ctx.lineWidth = Math.max(1.5, 1.9 * s);
       ctx.beginPath();
-      ctx.moveTo(cxx - 5 * s, cyy + 5 * s);
-      ctx.lineTo(cxx + 5 * s, cyy - 5 * s);
+      ctx.moveTo(cxx - 6 * s, cyy + 6 * s);
+      ctx.lineTo(cxx + 6 * s, cyy - 6 * s);
       ctx.stroke();
     }
   }
@@ -153,7 +154,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
   const dirDown = sc.to < sc.from;
   ctx.strokeStyle = '#ffffff';
   ctx.fillStyle = '#ffffff';
-  ctx.lineWidth = Math.max(1.5, 2 * s);
+  ctx.lineWidth = Math.max(1.8, 2.6 * s);
   if (!st.pickedGone) {
     const ax = left + 1.2 * s;
     ctx.setLineDash([3 * s, 2.5 * s]);
@@ -170,7 +171,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = Math.max(1.2, 1.4 * s);
     ctx.beginPath();
-    ctx.arc(shaftX + shaftW + 9 * s, floorMid(sc.rider), 3.6 * s, 0, Math.PI * 2);
+    ctx.arc(shaftX + shaftW + 10.5 * s, floorMid(sc.rider), 4.4 * s, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -186,7 +187,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
   if (sc.rider !== undefined && !dropped) {
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(shaftX + shaftW / 2, carY, 2.6 * s, 0, Math.PI * 2);
+    ctx.arc(shaftX + shaftW / 2, carY, 3.2 * s, 0, Math.PI * 2);
     ctx.fill();
   }
   const heading = sc.heading !== 0 ? sc.heading : (st.pos === sc.to ? 0 : dirDown ? -1 : 1);
