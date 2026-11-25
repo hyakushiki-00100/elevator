@@ -12,6 +12,7 @@ export const CARD_COLORS: Record<CardId, string> = {
   express: '#c4473a',
   zoneLow: '#55607a',
   zoneHigh: '#55607a',
+  noBulky: '#7b57b8',
 };
 
 /** カードの中の場面(階は 0〜4、0 が1階) */
@@ -22,7 +23,7 @@ export interface CardScene {
   /** かごが最初から向いている方向(矢印で見せる。0 なら出さない) */
   heading: -1 | 0 | 1;
   /** 待っている人: picked = このカードで迎えに行く人 / それ以外は選ばれない(通り過ぎる・無視する)人 */
-  calls: { floor: number; picked: boolean }[];
+  calls: { floor: number; picked: boolean; bulky?: boolean }[];
   /** かごに乗っている人の行き先(その階の左に「降りる」印の輪を出す)。いなければ省略 */
   rider?: number;
   /** 担当範囲のカード: 明るくする階 */
@@ -43,6 +44,8 @@ export const SCENES: Record<CardId, CardScene> = {
   zoneLow: { from: 2, to: 1, heading: 0, calls: [{ floor: 1, picked: true }, { floor: 4, picked: false }], lit: [0, 1, 2] },
   // 上層担当: 1階と4〜5階だけ明るい。2階の呼び出しは無視して、5階の人へ
   zoneHigh: { from: 3, to: 4, heading: 0, calls: [{ floor: 4, picked: true }, { floor: 1, picked: false }], lit: [0, 3, 4] },
+  // 大荷物お断り: 上へ向かう3階のかご。4階のスーツケースの人は(近くても)乗せず、2階の身軽な人へ
+  noBulky: { from: 2, to: 1, heading: 1, calls: [{ floor: 3, picked: false, bulky: true }, { floor: 1, picked: true }] },
 };
 
 /** 1回の場面の長さ(ms)。動かすときは now をこれで割った余りを t にする */
@@ -125,6 +128,14 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardId, x: number,
     ctx.arc(cxx, cyy - 0.5 * s, 3.2 * s, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillRect(cxx - 2.6 * s, cyy + 2 * s, 5.2 * s, 2.6 * s);
+    // 団体・荷物持ち: 人の右にスーツケース(取っ手つきの箱)
+    if (c.bulky) {
+      const bx = cxx + 4.5 * s, by = cyy - 1 * s;
+      ctx.fillRect(bx, by, 6 * s, 6 * s);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1, s);
+      ctx.strokeRect(bx + 1.5 * s, by - 2.2 * s, 3 * s, 2.2 * s);
+    }
     // 選ばれない人には斜線(無視する・通り過ぎる)
     if (!c.picked) {
       ctx.strokeStyle = '#ffffff';

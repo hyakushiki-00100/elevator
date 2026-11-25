@@ -127,21 +127,22 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBe(3);
   });
 
-  it('ステージ6(団体のホテル): 「同じ方向を優先」を「近い」の上に置くと3★。逆順や1枚だけでは届かない', () => {
+  it('ステージ6(団体のホテル): 「近い」だけで3★。「同じ方向」を足すと、団体の乗り降りで遅れて届かない', () => {
     const st = STAGES[5]!;
-    expect(rateRules(st, [['sameDir', 'nearest']]).stars).toBe(3);
-    expect(rateRules(st, [['nearest', 'sameDir']]).stars).toBe(2);
-    expect(rateRules(st, [['nearest']]).stars).toBe(2);
+    expect(rateRules(st, [['nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['sameDir', 'nearest']]).stars).toBeLessThan(3);
     expect(rateRules(st, [['express', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, [['noBulky', 'nearest']]).stars).toBeLessThan(3);
   });
 
-  it('ステージ7(荷物のデパート): 1基だけに役割(急行か下層担当)を持たせると3★。両方同じでは届かない', () => {
+  it('ステージ7(団体・荷物のデパート): 片方のかごだけ「大荷物お断り」にすると3★。置かない・両方に置くと届かない', () => {
     const st = STAGES[6]!;
-    expect(rateRules(st, [['nearest'], ['express', 'nearest']]).stars).toBe(3);
-    expect(rateRules(st, [['zoneLow', 'nearest'], ['nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['noBulky', 'sameDir', 'nearest'], ['express', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['noBulky', 'nearest'], ['express', 'nearest']]).stars).toBe(3);
+    // 全組み合わせの確認で見つけた、お断りなしの最良
+    expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['nearest']]).stars).toBeLessThan(3);
     expect(rateRules(st, both(['nearest'])).stars).toBeLessThan(3);
-    expect(rateRules(st, both(['express', 'nearest'])).stars).toBeLessThan(3);
-    expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, both(['noBulky', 'nearest'])).stars).toBeLessThan(3);
   });
 
   it('ステージ8(10階・3基): 「急行」と「担当範囲」の両方を使うと3★。片方だけの最良では届かない', () => {

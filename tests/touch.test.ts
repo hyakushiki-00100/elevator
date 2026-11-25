@@ -1,7 +1,7 @@
 // 押せる範囲の広げ幅(スマホで小さなボタンを押しやすくする)が、隣の押せる物とぶつからないことを確かめる
 import { describe, expect, it } from 'vitest';
 import {
-  EDITOR_PLAY, EDITOR_PREVIEW, handRect, MUTE_BUTTON, PAD_BUTTON, PAD_CARD, PAD_CARD_SMALL, PAD_MUTE, PAD_TAB, PAD_VOLUME, RESET_BUTTON,
+  EDITOR_PLAY, EDITOR_PREVIEW, handRect, MUTE_BUTTON, PAD_BUTTON, PAD_CARD, PAD_CARD_SMALL, PAD_HAND_TIGHT, PAD_MUTE, PAD_TAB, PAD_VOLUME, RESET_BUTTON,
   rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, slotRect, stageTabRect, VOLUME_PANEL, volumeLevelRect,
   editorHit, shareButtonHit, stageTabHit, volumeHit, type Rect,
 } from '../src/render/layout.ts';
@@ -47,6 +47,14 @@ describe('押せる範囲の広げ幅', () => {
     const s = slotRect(2, 3, 3);
     expect(editorHit(s.x + 5, s.y + 5, 3, 5, 5)).toEqual({ kind: 'slot', row: 2, index: 3 });
     expect(editorHit(...[rowButtonRect(2, 3)].map((r) => [r.x + 5, r.y + 5] as const)[0]!, 3, 5, 5)).toEqual({ kind: 'row', row: 2 });
+  });
+
+  it('手持ちが6枚のとき、広げても重ならず、試しに動かす窓にかからない', () => {
+    const rs = Array.from({ length: 6 }, (_, i) => grow(handRect(i, 6), PAD_HAND_TIGHT));
+    for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) expect(overlap(rs[a]!, rs[b]!)).toBe(false);
+    expect(overlap(rs[5]!, EDITOR_PREVIEW)).toBe(false);
+    const h = handRect(5, 6);
+    expect(editorHit(h.x + 5, h.y + 5, 2, 5, 6)).toEqual({ kind: 'hand', index: 5 });
   });
 
   it('音量の窓のボタンどうし・消音ボタンが、広げても重ならない', () => {

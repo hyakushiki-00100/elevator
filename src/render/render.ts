@@ -1022,7 +1022,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   // 手持ち。選択中の行に置いてあるカードは薄く。説明を見ているカードは枠で示す
   const placed = a.editRules[a.editRow] ?? [];
   a.unlocked.forEach((c, i) => {
-    const rc = handRect(i);
+    const rc = handRect(i, a.unlocked.length);
     const picked = a.drag === null && a.previewCard === c;
     drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { dim: placed.includes(c), t: loopT, active: picked });
   });
@@ -1090,7 +1090,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
 
   // 手本: 指が手持ちのカードを押さえ、枠まで引っ張ってみせる(カードの影が一緒に動く)
   if (a.editorHint) {
-    const from = handRect(a.editorHint.hand);
+    const from = handRect(a.editorHint.hand, a.unlocked.length);
     const to = slotRect(a.editorHint.row, a.editorHint.slot, a.editRules.length);
     const u = (a.now % 2200) / 2200;
     const k = u < 0.2 ? 0 : u < 0.75 ? (u - 0.2) / 0.55 : 1;

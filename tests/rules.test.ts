@@ -198,9 +198,9 @@ describe('ルールで動くエレベーター', () => {
 });
 
 describe('ルールでの長時間運転(不変条件)', () => {
-  const combos: CardId[][] = [['nearest'], ['sameDir'], ['express'], ['sameDir', 'nearest'], ['express', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'express'], ['zoneHigh', 'express']];
+  const combos: CardId[][] = [['nearest'], ['sameDir'], ['express'], ['sameDir', 'nearest'], ['express', 'sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest', 'express'], ['zoneHigh', 'express'], ['noBulky', 'sameDir', 'nearest']];
   for (const rs of combos) {
-    it(`[${rs.join(',')}] 2基: 定員超過なし・乗った人は60秒以内に降りる・決定的`, () => {
+    it(`[${rs.join(',')}] 2基: 定員超過なし・乗った人は90秒以内に降りる・決定的`, () => {
       const run = () => {
         const s = createSim({
           building: makeBuilding({ elevators: 2, capacity: 5, speed: 30 }),
@@ -229,7 +229,8 @@ describe('ルールでの長時間運転(不変条件)', () => {
         return { maxRide, hash: stateHash(s) };
       };
       const a = run();
-      expect(a.maxRide).toBeLessThan(60 * 30);
+      // 団体・荷物持ちは乗り降りに3秒よけいにかかる(2026-11-25)ので、途中の階で長く止まることがある。上限は90秒
+      expect(a.maxRide).toBeLessThan(90 * 30);
       expect(run().hash).toBe(a.hash);
     });
   }

@@ -16,6 +16,19 @@ export const KIND_SIZE: Record<Kind, number> = {
  * 45秒 → 25秒 → 16秒と短くしてきた(3日目の判定「簡単すぎる」を受けて)。
  * 16秒だと「誰から拾うか」の判断が点に効き、運行の考え方による差が広がる(tools/calibrate.ts で確認)。
  */
+/**
+ * 乗り降りにかかる追加の時間(tick、1人あたり。2026-11-25)。団体・荷物持ちは乗るときも降りるときも3秒よけいにかかる。
+ * これがないと、団体・荷物持ちは「場所を取るだけ」でほかの人を遅らせず、「大荷物お断り」のカードで役割を分ける意味がなかった
+ * (試算: 分けると−4〜−17%。3秒かかる形では、2基・ラッシュの建物で片方だけお断りにすると+5〜9%)。
+ * 公開済みのステージ1〜4には団体・荷物持ちが出ないので、これらの点数は変わらない。
+ */
+export const KIND_BOARD_EXTRA: Record<Kind, number> = {
+  normal: 0,
+  rushed: 0,
+  group: 3 * TICKS_PER_SECOND,
+  luggage: 3 * TICKS_PER_SECOND,
+};
+
 export const KIND_PATIENCE: Record<Kind, number> = {
   normal: 16 * TICKS_PER_SECOND,
   rushed: 8 * TICKS_PER_SECOND,

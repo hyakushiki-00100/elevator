@@ -30,6 +30,7 @@ export function presetsFor(elevators: number): Preset[] {
       { name: 'ゾーン+急行>近い', rules: [['zoneLow', 'express', 'nearest'], ['zoneHigh', 'express', 'nearest'], ...rest(['express', 'nearest'])] },
       { name: '1号機だけ急行>近い', rules: [['express', 'nearest'], ['nearest'], ...rest(['nearest'])] },
       { name: '下層のみゾーン', rules: [['zoneLow', 'nearest'], ['nearest'], ...rest(['nearest'])] },
+      { name: '片方だけ大荷物お断り', rules: [['noBulky', 'sameDir', 'nearest'], ['express', 'nearest'], ...rest(['nearest'])] },
     );
   }
   return out;

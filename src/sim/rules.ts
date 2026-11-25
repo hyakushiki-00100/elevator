@@ -4,10 +4,10 @@ import type { Elevator, World } from './elevator.ts';
 // 運行ルールのカード(5.4節)。
 // カードのID(文字列)は共有文字列の中身になるため、一度公開したら意味を変えない。
 
-export type CardId = 'nearest' | 'sameDir' | 'express' | 'zoneLow' | 'zoneHigh';
+export type CardId = 'nearest' | 'sameDir' | 'express' | 'zoneLow' | 'zoneHigh' | 'noBulky';
 
 /** すべてのカード(共有文字列での番号もこの順。末尾に足すだけにし、並べ替えない) */
-export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'express', 'zoneLow', 'zoneHigh'];
+export const CARD_ORDER: readonly CardId[] = ['nearest', 'sameDir', 'express', 'zoneLow', 'zoneHigh', 'noBulky'];
 
 /** 担当範囲のカード: 行き先を決めるのではなく、そのエレベーターが応える階を絞る(どの枠に置いても効く) */
 export const ZONE_CARDS: readonly CardId[] = ['zoneLow', 'zoneHigh'];
@@ -82,7 +82,16 @@ const express: CardFn = (c) => {
 /** 担当範囲のカードは行き先を決めない(makeContext で呼び出しを絞る) */
 const zone: CardFn = () => null;
 
-export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, express, zoneLow: zone, zoneHigh: zone };
+export const CARDS: Record<CardId, CardFn> = { nearest, sameDir, express, zoneLow: zone, zoneHigh: zone, noBulky: zone };
+
+/**
+ * 大荷物お断り(noBulky、2026-11-25): このかごには団体・荷物持ち(定員を2人分以上使う人)を乗せない。
+ * 行き先は決めず、どの枠に置いても効く(担当範囲と同じ扱い)。乗せない人がいるだけの階は呼び出しにならない。
+ * 団体・荷物持ちは乗り降りに時間がかかる(passenger.ts の KIND_BOARD_EXTRA)ので、2基のうち片方を「身軽な人の速い便」にできる。
+ */
+export function acceptsSize(rules: readonly CardId[], size: number): boolean {
+  return !(size > 1 && rules.includes('noBulky'));
+}
 
 /** そのエレベーターが応える階か(担当範囲のカードがなければすべて。複数あれば合わせた範囲) */
 export function servesFloor(rules: readonly CardId[], f: number, floors: number): boolean {
@@ -99,6 +108,7 @@ export function hallCalls(e: Elevator, w: World, load: number): boolean[] {
     // まだ歩いて向かっている人(見本の案B)は呼び出しにならない
     if (p.spawnTick > w.tick) continue;
     if (!servesFloor(e.rules, p.origin, floors)) continue;
+    if (!acceptsSize(e.rules, p.size)) continue;
     hall[p.origin] = true;
   }
   return hall;

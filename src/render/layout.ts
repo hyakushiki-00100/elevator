@@ -98,6 +98,8 @@ export const PAD_BUTTON = 6;
 export const PAD_TAB = 4;
 /** カードの枠と手持ち(間が 18 → 9) */
 export const PAD_CARD = 9;
+/** 手持ちが6枚以上のとき(間が 9 → 4) */
+export const PAD_HAND_TIGHT = 4;
 /** 3行のときの小さな枠(横の間が 34、行の間が 22 → 縦に重ならない 9 にそろえる) */
 export const PAD_CARD_SMALL = 9;
 /** 音量の窓の段階のボタン(間が 6 → 3) */
@@ -153,9 +155,14 @@ export function slotRect(row: number, i: number, rows = 2): Rect {
   return { x: SLOT_X0 + i * (CARD_W + CARD_GAP) + (CARD_W - g.cw) / 2, y: g.y0 + row * g.h, w: g.cw, h: g.ch };
 }
 
-/** 手持ちのカードの i 番目 */
-export function handRect(i: number): Rect {
-  return { x: SLOT_X0 + i * (CARD_W + CARD_GAP), y: HAND_Y, w: CARD_W, h: CARD_H };
+/**
+ * 手持ちのカードの i 番目(count: 手持ちの枚数)。
+ * 6枚以上のときは、右の試しに動かす窓にかからないよう、少し小さく(64×85)詰めて並べる(2026-11-25、6枚目のカード)。
+ */
+export function handRect(i: number, count = 5): Rect {
+  if (count <= 5) return { x: SLOT_X0 + i * (CARD_W + CARD_GAP), y: HAND_Y, w: CARD_W, h: CARD_H };
+  const w = 64, h = 85, gap = 9;
+  return { x: SLOT_X0 + i * (w + gap), y: HAND_Y + (CARD_H - h) / 2, w, h };
 }
 
 /** 行の頭(そのエレベーターのかごの絵)。タップでその行を選ぶ */
@@ -177,7 +184,7 @@ export function editorHit(x: number, y: number, rows: number, slotCount: number,
     for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i, rows), x, y, rows >= 3 ? PAD_CARD_SMALL : PAD_CARD)) return { kind: 'slot', row: r, index: i };
     if (inRect(rowButtonRect(r, rows), x, y)) return { kind: 'row', row: r };
   }
-  for (let i = 0; i < handCount; i++) if (inRect(handRect(i), x, y, PAD_CARD)) return { kind: 'hand', index: i };
+  for (let i = 0; i < handCount; i++) if (inRect(handRect(i, handCount), x, y, handCount > 5 ? PAD_HAND_TIGHT : PAD_CARD)) return { kind: 'hand', index: i };
   return null;
 }
 

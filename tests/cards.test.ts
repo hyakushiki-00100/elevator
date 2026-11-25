@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cardSceneAt, SCENES, STATIC_T } from '../src/render/cards.ts';
-import { CARDS, CARD_ORDER, servesFloor, type CardId, type RuleContext } from '../src/sim/rules.ts';
+import { acceptsSize, CARDS, CARD_ORDER, servesFloor, type CardId, type RuleContext } from '../src/sim/rules.ts';
 
 // カードの絵の場面が、本物のカードの判断と食い違っていないか(絵が嘘をつかないように)
 describe('カードの絵の場面', () => {
@@ -20,7 +20,9 @@ describe('カードの絵の場面', () => {
       const sc = SCENES[c];
       // 担当範囲のカードは「担当範囲 → 近い」の組み合わせとして確かめる
       const rules: CardId[] = c === 'zoneLow' || c === 'zoneHigh' ? [c, 'nearest'] : [c];
-      const hall = [0, 1, 2, 3, 4].map((f) => sc.calls.some((x) => x.floor === f) && servesFloor(rules, f, 5));
+      // 大荷物お断りは「大荷物お断り → 近い」の組み合わせとして確かめる(スーツケースの人だけの階は呼び出しにならない)
+      if (c === 'noBulky') rules.push('nearest');
+      const hall = [0, 1, 2, 3, 4].map((f) => sc.calls.some((x) => x.floor === f && acceptsSize(rules, x.bulky ? 2 : 1)) && servesFloor(rules, f, 5));
       const ctx: RuleContext = {
         cur: sc.from, floors: 5, heading: sc.heading === 0 ? 1 : sc.heading, hall,
         car: [0, 1, 2, 3, 4].map((f) => sc.rider === f), includeCur: false,

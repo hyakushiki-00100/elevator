@@ -103,7 +103,7 @@ describe('編集画面の当たり判定', () => {
     const n = CARD_ORDER.length;
     const rects = [
       ...[0, 1].flatMap((r) => [0, 1, 2, 3, 4].map((i) => slotRect(r, i))),
-      ...Array.from({ length: n }, (_, i) => handRect(i)),
+      ...Array.from({ length: n }, (_, i) => handRect(i, n)),
       rowButtonRect(0), rowButtonRect(1), EDITOR_PLAY, EDITOR_PREVIEW, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, RESET_BUTTON,
       // ステージの選択ボタン: 今のステージ数 + 1 つ分の余裕
       ...Array.from({ length: STAGES.length + 1 }, (_, i) => stageTabRect(i)),

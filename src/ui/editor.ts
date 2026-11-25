@@ -52,6 +52,8 @@ export const UNLOCK_STEPS: readonly (readonly CardId[])[] = [
   ['sameDir'],
   ['express'],
   ['zoneLow', 'zoneHigh'],
+  // 5日目の終わり(2026-11-25 追加)。団体・荷物持ちが出るステージ6・7で使う
+  ['noBulky'],
 ];
 
 /** 1日を終えたときに手に入るカード(もう全部持っていれば空) */

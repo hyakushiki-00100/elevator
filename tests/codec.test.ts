@@ -9,7 +9,8 @@ const samples: SharedRules[] = [
   { stageId: 1, rules: [[]] },
   { stageId: 3, rules: [['express', 'nearest']] },
   { stageId: 4, rules: [['zoneLow', 'nearest'], ['zoneHigh', 'sameDir', 'nearest', 'express']] },
-  { stageId: 255, rules: Array.from({ length: 8 }, () => [...CARD_ORDER]) },
+  { stageId: 255, rules: Array.from({ length: 8 }, () => CARD_ORDER.slice(0, 5)) },
+  { stageId: 7, rules: [['noBulky', 'sameDir', 'nearest'], ['zoneLow', 'nearest']] },
   ...STAGES.flatMap((st) => presetsFor(st.building.elevators).map((p) => ({ stageId: st.id, rules: p.rules }))),
 ];
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';

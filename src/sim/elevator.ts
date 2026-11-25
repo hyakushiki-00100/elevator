@@ -1,7 +1,7 @@
 import { UNITS_PER_FLOOR as U, type Building } from './building.ts';
-import type { Passenger, Stats } from './passenger.ts';
+import { KIND_BOARD_EXTRA, type Passenger, type Stats } from './passenger.ts';
 import { deliveryPoints } from './score.ts';
-import { evaluateRules, hallCalls, makeContext, type CardId } from './rules.ts';
+import { acceptsSize, evaluateRules, hallCalls, makeContext, type CardId } from './rules.ts';
 
 /** 描画の演出用に sim が出す出来事。採点や状態には使わない */
 export type SimEvent =
@@ -163,6 +163,8 @@ function serve(e: Elevator, w: World): void {
   const b = w.building;
   const cur = e.pos / U;
   let changed = false;
+  // 団体・荷物持ちの乗り降りの追加の時間(passenger.ts の KIND_BOARD_EXTRA)
+  let extra = 0;
 
   // 降りる
   for (const p of w.passengers) {
@@ -172,6 +174,7 @@ function serve(e: Elevator, w: World): void {
       w.stats.delivered++;
       w.stats.servicePoints += deliveryPoints(p.waitTicks);
       w.events.push({ type: 'delivered', floor: cur, elevator: e.id });
+      extra += KIND_BOARD_EXTRA[p.kind];
       changed = true;
     }
   }
@@ -180,7 +183,7 @@ function serve(e: Elevator, w: World): void {
   // 乗る(待ち行列の順。入りきらない人は飛ばして、次の人を試す)
   let load = loadOf(e, w);
   for (const p of w.passengers) {
-    if (p.state === 'waiting' && p.origin === cur && p.spawnTick <= w.tick && load + p.size <= b.capacity) {
+    if (p.state === 'waiting' && p.origin === cur && p.spawnTick <= w.tick && load + p.size <= b.capacity && acceptsSize(e.rules, p.size)) {
       p.state = 'riding';
       p.elevatorId = e.id;
       load += p.size;
@@ -190,6 +193,7 @@ function serve(e: Elevator, w: World): void {
       p.waitTicks = w.tick + 1 - p.spawnTick;
       w.stats.totalWait += p.waitTicks;
       w.events.push({ type: 'boarded', floor: cur, elevator: e.id });
+      extra += KIND_BOARD_EXTRA[p.kind];
       changed = true;
     }
   }
@@ -199,7 +203,7 @@ function serve(e: Elevator, w: World): void {
     e.manualTarget = null;
     changed = true;
   }
-  if (changed && e.timer < b.boardTicks) e.timer = b.boardTicks;
+  if (changed && e.timer < b.boardTicks + extra) e.timer = b.boardTicks + extra;
 }
 
 export function stepElevator(e: Elevator, w: World): void {
