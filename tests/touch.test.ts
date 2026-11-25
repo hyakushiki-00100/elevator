@@ -1,7 +1,7 @@
 // 押せる範囲の広げ幅(スマホで小さなボタンを押しやすくする)が、隣の押せる物とぶつからないことを確かめる
 import { describe, expect, it } from 'vitest';
 import {
-  EDITOR_PLAY, EDITOR_PREVIEW, handRect, MUTE_BUTTON, PAD_BUTTON, PAD_CARD, PAD_MUTE, PAD_TAB, PAD_VOLUME, RESET_BUTTON,
+  EDITOR_PLAY, EDITOR_PREVIEW, handRect, MUTE_BUTTON, PAD_BUTTON, PAD_CARD, PAD_CARD_SMALL, PAD_MUTE, PAD_TAB, PAD_VOLUME, RESET_BUTTON,
   rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, slotRect, stageTabRect, VOLUME_PANEL, volumeLevelRect,
   editorHit, shareButtonHit, stageTabHit, volumeHit, type Rect,
 } from '../src/render/layout.ts';
@@ -28,6 +28,25 @@ describe('押せる範囲の広げ幅', () => {
     }
     // カードの枠は、試しに動かす窓(右)にかからない
     for (let r = 0; r < 2; r++) expect(overlap(grow(slotRect(r, 4), PAD_CARD), EDITOR_PREVIEW)).toBe(false);
+  });
+
+  it('3基(3行)のときも、枠・行の頭・手持ちが広げても重ならず、試しに動かす窓にもかからない', () => {
+    const items: [string, Rect][] = [];
+    for (let r = 0; r < 3; r++) {
+      items.push([`row${r}`, rowButtonRect(r, 3)]);
+      for (let i = 0; i < 5; i++) items.push([`slot${r}-${i}`, grow(slotRect(r, i, 3), PAD_CARD_SMALL)]);
+    }
+    for (let i = 0; i < 5; i++) items.push([`hand${i}`, grow(handRect(i), PAD_CARD)]);
+    for (let a = 0; a < items.length; a++) {
+      for (let b = a + 1; b < items.length; b++) {
+        expect(overlap(items[a]![1], items[b]![1]), `${items[a]![0]} と ${items[b]![0]}`).toBe(false);
+      }
+    }
+    for (let r = 0; r < 3; r++) expect(overlap(grow(slotRect(r, 4, 3), PAD_CARD_SMALL), EDITOR_PREVIEW)).toBe(false);
+    // 3行目の枠を押すと、3行目の枠として扱う
+    const s = slotRect(2, 3, 3);
+    expect(editorHit(s.x + 5, s.y + 5, 3, 5, 5)).toEqual({ kind: 'slot', row: 2, index: 3 });
+    expect(editorHit(...[rowButtonRect(2, 3)].map((r) => [r.x + 5, r.y + 5] as const)[0]!, 3, 5, 5)).toEqual({ kind: 'row', row: 2 });
   });
 
   it('音量の窓のボタンどうし・消音ボタンが、広げても重ならない', () => {

@@ -98,6 +98,8 @@ export const PAD_BUTTON = 6;
 export const PAD_TAB = 4;
 /** カードの枠と手持ち(間が 18 → 9) */
 export const PAD_CARD = 9;
+/** 3行のときの小さな枠(横の間が 34、行の間が 22 → 縦に重ならない 9 にそろえる) */
+export const PAD_CARD_SMALL = 9;
 /** 音量の窓の段階のボタン(間が 6 → 3) */
 export const PAD_VOLUME = 3;
 
@@ -137,13 +139,18 @@ export const EDITOR_PREVIEW: Rect = { x: 580, y: 36, w: 344, h: 388 };
 /** 開始ボタン(右下) */
 export const EDITOR_PLAY: Rect = { x: 840, y: 434, w: 84, h: 84 };
 
-function rowY(row: number): number {
-  return ROW_Y0 + row * ROW_H;
+/**
+ * 行の並び方。エレベーターが3基のときは、3行が手持ちのカードの上に収まるよう、枠のカードを小さくする(2026-11-25)。
+ * 枠の横の位置(列の中心)は手持ちのカードと同じにそろえる。
+ */
+function rowGeom(rows: number): { y0: number; h: number; cw: number; ch: number } {
+  return rows >= 3 ? { y0: 40, h: 96, cw: 56, ch: 74 } : { y0: ROW_Y0, h: ROW_H, cw: CARD_W, ch: CARD_H };
 }
 
-/** エレベーター row の i 番目の枠 */
-export function slotRect(row: number, i: number): Rect {
-  return { x: SLOT_X0 + i * (CARD_W + CARD_GAP), y: rowY(row), w: CARD_W, h: CARD_H };
+/** エレベーター row の i 番目の枠(rows: 行の数 = エレベーターの数) */
+export function slotRect(row: number, i: number, rows = 2): Rect {
+  const g = rowGeom(rows);
+  return { x: SLOT_X0 + i * (CARD_W + CARD_GAP) + (CARD_W - g.cw) / 2, y: g.y0 + row * g.h, w: g.cw, h: g.ch };
 }
 
 /** 手持ちのカードの i 番目 */
@@ -152,8 +159,9 @@ export function handRect(i: number): Rect {
 }
 
 /** 行の頭(そのエレベーターのかごの絵)。タップでその行を選ぶ */
-export function rowButtonRect(row: number): Rect {
-  return { x: 36, y: rowY(row) + 8, w: 64, h: 80 };
+export function rowButtonRect(row: number, rows = 2): Rect {
+  const g = rowGeom(rows);
+  return { x: 36, y: g.y0 + row * g.h + 8, w: 64, h: g.ch - 16 };
 }
 
 export type EditorHit =
@@ -166,8 +174,8 @@ export type EditorHit =
 export function editorHit(x: number, y: number, rows: number, slotCount: number, handCount: number): EditorHit {
   if (inRect(EDITOR_PLAY, x, y)) return { kind: 'play' };
   for (let r = 0; r < rows; r++) {
-    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i), x, y, PAD_CARD)) return { kind: 'slot', row: r, index: i };
-    if (inRect(rowButtonRect(r), x, y)) return { kind: 'row', row: r };
+    for (let i = 0; i < slotCount; i++) if (inRect(slotRect(r, i, rows), x, y, rows >= 3 ? PAD_CARD_SMALL : PAD_CARD)) return { kind: 'slot', row: r, index: i };
+    if (inRect(rowButtonRect(r, rows), x, y)) return { kind: 'row', row: r };
   }
   for (let i = 0; i < handCount; i++) if (inRect(handRect(i), x, y, PAD_CARD)) return { kind: 'hand', index: i };
   return null;

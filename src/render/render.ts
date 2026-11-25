@@ -977,9 +977,9 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   for (let r = 0; r < rows; r++) {
     const rules = a.editRules[r]!;
     const color = elevatorColor(r);
-    const head = rowButtonRect(r);
-    const first = slotRect(r, 0);
-    const last = slotRect(r, a.slotCount - 1);
+    const head = rowButtonRect(r, rows);
+    const first = slotRect(r, 0, rows);
+    const last = slotRect(r, a.slotCount - 1, rows);
     // 行の帯(そのエレベーターの色をうっすら)。選択中の行は濃く
     ctx.fillStyle = color;
     ctx.globalAlpha = r === a.editRow ? 0.16 : 0.07;
@@ -996,7 +996,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     }
     // 枠
     for (let i = 0; i < a.slotCount; i++) {
-      const rc = slotRect(r, i);
+      const rc = slotRect(r, i, rows);
       const c = rules[i] ?? null;
       const isOrigin = a.drag !== null && a.drag.from.kind === 'slot' && a.drag.from.row === r && a.drag.from.slot === i;
       if (c && !isOrigin) drawCard(ctx, c, rc.x, rc.y, rc.w, rc.h, { t: loopT });
@@ -1016,7 +1016,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
     // かごから右へ順に流れる光(かごは左のカードから順に確かめる。空いた枠は飛ばす)
     const filled: number[] = [];
     for (let i = 0; i < a.slotCount; i++) if (rules[i]) filled.push(i);
-    drawFlow(ctx, head, r, filled, color, a.now);
+    drawFlow(ctx, head, r, filled, color, a.now, rows);
   }
 
   // 手持ち。選択中の行に置いてあるカードは薄く。説明を見ているカードは枠で示す
@@ -1091,7 +1091,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, a: DrawArgs): void {
   // 手本: 指が手持ちのカードを押さえ、枠まで引っ張ってみせる(カードの影が一緒に動く)
   if (a.editorHint) {
     const from = handRect(a.editorHint.hand);
-    const to = slotRect(a.editorHint.row, a.editorHint.slot);
+    const to = slotRect(a.editorHint.row, a.editorHint.slot, a.editRules.length);
     const u = (a.now % 2200) / 2200;
     const k = u < 0.2 ? 0 : u < 0.75 ? (u - 0.2) / 0.55 : 1;
     const e = k * k * (3 - 2 * k);
@@ -1151,13 +1151,13 @@ function drawResetConfirm(ctx: CanvasRenderingContext2D): void {
 }
 
 /** かごから右のカードへ、順に流れる光の粒(カードを左から順に確かめることを見せる) */
-function drawFlow(ctx: CanvasRenderingContext2D, head: Rect, row: number, filled: readonly number[], color: string, now: number): void {
+function drawFlow(ctx: CanvasRenderingContext2D, head: Rect, row: number, filled: readonly number[], color: string, now: number, rows: number): void {
   const stops = [head.x + head.w - 4];
   for (const i of filled.length > 0 ? filled : [0]) {
-    const rc = slotRect(row, i);
+    const rc = slotRect(row, i, rows);
     stops.push(rc.x + rc.w / 2);
   }
-  const s0 = slotRect(row, 0);
+  const s0 = slotRect(row, 0, rows);
   const y = s0.y + s0.h + 8;
   ctx.strokeStyle = color;
   ctx.globalAlpha = 0.45;

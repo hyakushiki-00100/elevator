@@ -190,4 +190,24 @@ export const STAGES: readonly Stage[] = [
     starsNeeded: 12,
     look: 'department',
   },
+  {
+    id: 8,
+    seed: 1069,
+    // 10階・3基のオフィスビル(2026-11-25)。1階から上へ向かう人(3割)と、下の階どうし・上の階どうしの移動(45%)がまじる。
+    // 条件を探した結果、「1基を急行、2基を下層・上層に分ける」組み合わせが、3つのシード群のどれでも+2.5%以上で1位だった
+    building: makeBuilding({ floors: 10, elevators: 3, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.028, rateEnd: 0.0378, fromGround: 0.3, local: 0.45 }),
+        makePhase({ ticks: MIN, rate: 0.028, rateEnd: 0.0378, fromGround: 0.3, local: 0.45 }),
+        makePhase({ ticks: MIN, rate: 0.028, rateEnd: 0.0378, fromGround: 0.3, local: 0.45 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 暫定(2026-11-25、全組み合わせの確認の途中): 手動相当 初心者 8951 / 上級者 9248 / 全部[近い] 9964
+    stars: [4500, 8900, 11100],
+    opensAt: 5,
+    starsNeeded: 15,
+    look: 'office',
+  },
 ];
