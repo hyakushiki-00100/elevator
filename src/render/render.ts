@@ -812,7 +812,7 @@ function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly
     if (ef.type === 'missed') {
       iconCross(ctx, l.queueLeft + 14, y, 11, alpha);
       ctx.textAlign = 'left';
-      const txt = `-${PENALTY_PER_MISS}`;
+      const txt = `-${ef.points ?? PENALTY_PER_MISS}`;
       ctx.strokeText(txt, l.queueLeft + 30, y);
       ctx.fillStyle = '#ff5a5a';
       ctx.fillText(txt, l.queueLeft + 30, y);

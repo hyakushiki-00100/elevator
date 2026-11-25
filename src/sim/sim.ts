@@ -1,6 +1,7 @@
 import type { Building } from './building.ts';
 import { createElevator, stepElevator, type Elevator, type SimEvent } from './elevator.ts';
-import { makePassenger, WALK_TICKS, type Kind, type Passenger, type Stats } from './passenger.ts';
+import { KIND_HEADCOUNT, makePassenger, WALK_TICKS, type Kind, type Passenger, type Stats } from './passenger.ts';
+import { PENALTY_PER_MISS } from './score.ts';
 import { Rng } from './rng.ts';
 import { CARD_ORDER, isCardId, type CardId } from './rules.ts';
 import { dayTicks, maybeSpawn, phaseAt, validatePlan, type DayPlan } from './traffic.ts';
@@ -126,7 +127,9 @@ export function step(s: SimState, commands: readonly Command[] = []): void {
     if (q.state === 'waiting' && s.tick + 1 - q.spawnTick >= q.patience) {
       q.state = 'gone';
       s.stats.missed++;
-      s.events.push({ type: 'missed', floor: q.origin });
+      // 団体は3人分の減点(1人分は computeScore で引くので、残りの分をここで引く)
+      s.stats.servicePoints -= PENALTY_PER_MISS * (KIND_HEADCOUNT[q.kind] - 1);
+      s.events.push({ type: 'missed', floor: q.origin, penalty: PENALTY_PER_MISS * KIND_HEADCOUNT[q.kind] });
     }
   }
 
@@ -142,7 +145,8 @@ export function step(s: SimState, commands: readonly Command[] = []): void {
     if (s.passengers.length === 0 || overtimeOver) {
       for (const q of s.passengers) {
         s.stats.missed++;
-        s.events.push({ type: 'missed', floor: q.state === 'riding' ? q.dest : q.origin });
+        s.stats.servicePoints -= PENALTY_PER_MISS * (KIND_HEADCOUNT[q.kind] - 1);
+        s.events.push({ type: 'missed', floor: q.state === 'riding' ? q.dest : q.origin, penalty: PENALTY_PER_MISS * KIND_HEADCOUNT[q.kind] });
       }
       s.passengers = [];
       s.finished = true;

@@ -1,5 +1,5 @@
 import { UNITS_PER_FLOOR as U, type Building } from './building.ts';
-import { KIND_BOARD_EXTRA, type Passenger, type Stats } from './passenger.ts';
+import { KIND_BOARD_EXTRA, KIND_HEADCOUNT, type Passenger, type Stats } from './passenger.ts';
 import { deliveryPoints } from './score.ts';
 import { acceptsSize, evaluateRules, hallCalls, makeContext, type CardId } from './rules.ts';
 
@@ -9,7 +9,8 @@ export type SimEvent =
   | { type: 'delivered'; floor: number; elevator: number; points: number; dest: number }
   /** dest: 乗った人の行き先(描画の「乗り込む人」の色に使う。sim の結果には影響しない) */
   | { type: 'boarded'; floor: number; elevator: number; dest: number }
-  | { type: 'missed'; floor: number };
+  /** penalty: この人(組)での減点(描画の「-点」に使う) */
+  | { type: 'missed'; floor: number; penalty: number };
 
 export type Phase = 'idle' | 'moving' | 'open';
 
@@ -174,7 +175,7 @@ function serve(e: Elevator, w: World): void {
       p.state = 'arrived';
       p.elevatorId = -1;
       w.stats.delivered++;
-      const pts = deliveryPoints(p.waitTicks);
+      const pts = deliveryPoints(p.waitTicks) * KIND_HEADCOUNT[p.kind];
       w.stats.servicePoints += pts;
       w.events.push({ type: 'delivered', floor: cur, elevator: e.id, points: pts, dest: p.dest });
       extra += KIND_BOARD_EXTRA[p.kind];

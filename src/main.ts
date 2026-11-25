@@ -600,7 +600,7 @@ function frame(now: number): void {
         effects.push({ type: 'alight', floor: ev.floor, elevator: ev.elevator, t0: now, dest: ev.dest });
         sfx('deliver');
       } else if (ev.type === 'missed') {
-        effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now });
+        effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now, points: ev.penalty });
         sfx('miss');
       } else if (ev.type === 'boarded') {
         effects.push({ type: 'board', floor: ev.floor, elevator: ev.elevator, t0: now, dest: ev.dest });

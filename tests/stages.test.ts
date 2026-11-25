@@ -135,12 +135,12 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, [['noBulky', 'nearest']]).stars).toBeLessThan(3);
   });
 
-  it('ステージ7(団体・荷物のデパート): 片方のかごだけ「大荷物お断り」にすると3★。置かない・両方に置くと届かない', () => {
+  it('ステージ7(荷物のデパート): 片方のかごだけ「大荷物お断り」にすると3★。置かない・両方に置くと届かない', () => {
     const st = STAGES[6]!;
-    expect(rateRules(st, [['noBulky', 'sameDir', 'nearest'], ['express', 'nearest']]).stars).toBe(3);
-    expect(rateRules(st, [['noBulky', 'nearest'], ['express', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['noBulky', 'nearest'], ['sameDir', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['noBulky', 'nearest'], ['express', 'sameDir', 'nearest']]).stars).toBe(3);
     // 全組み合わせの確認で見つけた、お断りなしの最良
-    expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, [['nearest'], ['sameDir', 'nearest']]).stars).toBeLessThan(3);
     expect(rateRules(st, both(['nearest'])).stars).toBeLessThan(3);
     expect(rateRules(st, both(['noBulky', 'nearest'])).stars).toBeLessThan(3);
   });

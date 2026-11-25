@@ -29,6 +29,18 @@ export const KIND_BOARD_EXTRA: Record<Kind, number> = {
   luggage: 3 * TICKS_PER_SECOND,
 };
 
+/**
+ * 点数の上で何人分として数えるか(2026-11-25)。団体は3人なので、運べば3人分の点、取りこぼせば3人分の減点。
+ * 1人分のままだと、団体(定員3人分を使う)は「運ぶより見捨てたほうが得」になり、両方のかごに「大荷物お断り」を置く
+ * 抜け道ができた(ステージの条件を探したときに見つかった)。人数の数え方(運んだ人数・取りこぼし)は1組=1のまま。
+ */
+export const KIND_HEADCOUNT: Record<Kind, number> = {
+  normal: 1,
+  rushed: 1,
+  group: 3,
+  luggage: 1,
+};
+
 export const KIND_PATIENCE: Record<Kind, number> = {
   normal: 16 * TICKS_PER_SECOND,
   rushed: 8 * TICKS_PER_SECOND,
