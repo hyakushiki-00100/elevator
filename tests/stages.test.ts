@@ -143,4 +143,13 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(rateRules(st, both(['express', 'nearest'])).stars).toBeLessThan(3);
     expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBeLessThan(3);
   });
+
+  it('ステージ8(10階・3基): 「急行」と「担当範囲」の両方を使うと3★。片方だけの最良では届かない', () => {
+    const st = STAGES[7]!;
+    expect(rateRules(st, [['express', 'sameDir', 'nearest'], ['zoneLow', 'express', 'nearest'], ['express', 'sameDir', 'nearest']]).stars).toBe(3);
+    // 全組み合わせの確認で見つけた、急行なし・担当範囲なしのそれぞれの最良
+    expect(rateRules(st, [['sameDir', 'nearest'], ['zoneLow', 'sameDir', 'nearest'], ['zoneLow', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, [['express', 'nearest'], ['express', 'sameDir', 'nearest'], ['express', 'sameDir', 'nearest']]).stars).toBeLessThan(3);
+    expect(rateRules(st, [['nearest'], ['nearest'], ['nearest']]).stars).toBeLessThan(3);
+  });
 });
