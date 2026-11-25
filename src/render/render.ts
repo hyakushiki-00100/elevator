@@ -287,9 +287,18 @@ function drawBuilding(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now
 
   for (let f = 0; f < l.floors; f++) {
     const y = floorTop(l, f);
-    const band = f % 2 === 0 ? T().bandA : T().bandB;
+    const lb = T().lookBands?.[look];
+    const band = lb ? lb[f % 2]! : f % 2 === 0 ? T().bandA : T().bandB;
     ctx.fillStyle = T().metal ? metalGradient(ctx, 0, y, 0, l.floorH, band, true) : band;
     ctx.fillRect(0, y, BUILDING_RIGHT, l.floorH);
+    if (lb) {
+      // 天井の照明: 各階の上の方を少し明るく(建物の中の明かり)
+      const g = ctx.createLinearGradient(0, y, 0, y + l.floorH * 0.6);
+      g.addColorStop(0, 'rgba(255,240,210,0.10)');
+      g.addColorStop(1, 'rgba(255,240,210,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(8, y, BUILDING_RIGHT - 8, l.floorH * 0.6);
+    }
     // 階の色の帯と番号
     ctx.fillStyle = floorColor(f);
     ctx.fillRect(0, y, 8, l.floorH);
@@ -337,12 +346,13 @@ function drawFloorDecor(ctx: CanvasRenderingContext2D, l: Layout, f: number, y: 
   ctx.save();
   if (look === 'office') {
     // オフィス: 横長の窓が並ぶ
-    ctx.fillStyle = 'rgba(140,190,255,0.07)';
+    ctx.fillStyle = 'rgba(140,190,255,0.13)';
     const ww = 46;
     for (let x = x0; x + ww <= x1; x += ww + 14) ctx.fillRect(x, y + h * 0.18, ww, h * 0.32);
   } else if (look === 'department') {
     // デパート: 各階の上に日よけ(山形の縁)。1階は入口を広く明るく
-    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    // 日よけは階ごとに色を変える(赤・黄・緑のしま)
+    ctx.fillStyle = ['rgba(230,90,80,0.22)', 'rgba(240,200,80,0.20)', 'rgba(110,200,140,0.20)'][f % 3]!;
     ctx.fillRect(x0, y + 4, x1 - x0, h * 0.12);
     const sw = 20;
     ctx.beginPath();
@@ -353,7 +363,7 @@ function drawFloorDecor(ctx: CanvasRenderingContext2D, l: Layout, f: number, y: 
     }
     ctx.fill();
     if (f === 0) {
-      ctx.fillStyle = 'rgba(255,220,140,0.06)';
+      ctx.fillStyle = 'rgba(255,220,140,0.10)';
       ctx.fillRect(x0, y + h * 0.3, x1 - x0, h * 0.65);
     }
   } else if (look === 'hotel') {
@@ -369,7 +379,7 @@ function drawFloorDecor(ctx: CanvasRenderingContext2D, l: Layout, f: number, y: 
         ctx.fillRect(x + dw - 6, y + h - 4 - dh * 0.5, 3, 3);
       }
     }
-    ctx.fillStyle = 'rgba(170,40,50,0.12)';
+    ctx.fillStyle = 'rgba(200,60,70,0.30)';
     ctx.fillRect(x0 - 10, y + h - 7, x1 - x0 + 20, 5);
   }
   ctx.restore();

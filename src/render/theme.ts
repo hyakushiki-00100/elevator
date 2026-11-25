@@ -6,6 +6,11 @@ export interface Theme {
   bg: string;
   bandA: string;
   bandB: string;
+  /**
+   * 建物の種類ごとの壁の色 [偶数階, 奇数階](2026-11-25 見た目の手直しb、ユーザー決定「abcd全部」)。
+   * なければ bandA・bandB。右のパネル・数字(黒とLED)は変えず、建物の中だけに色を付ける
+   */
+  lookBands?: Record<'plain' | 'office' | 'department' | 'hotel', [string, string]>;
   shaft: string;
   floorLine: string;
   panelBg: string;
@@ -105,7 +110,13 @@ export const THEMES: Record<Theme['name'], Theme> = {
   },
   // D4 黒とLED: 黒い面に、橙色に光る7セグメント表示の数字
   led: {
-    name: 'led', bg: '#070707', bandA: '#121212', bandB: '#161616', shaft: '#030303', floorLine: '#2a2a2a',
+    name: 'led', bg: '#070707', bandA: '#121212', bandB: '#161616',
+    lookBands: {
+      plain: ['#1c2129', '#212731'], // 灰青のビル
+      office: ['#14243a', '#182a42'], // 紺(ガラスのオフィス)
+      department: ['#2e2219', '#36281d'], // 暖かい茶(店内)
+      hotel: ['#2b1621', '#331a27'], // ワイン色(じゅうたんの廊下)
+    }, shaft: '#030303', floorLine: '#2a2a2a',
     panelBg: '#0d0d0d', dialogBg: '#141414', button: '#262626', buttonActive: '#ff8a1f',
     text: '#ff9a2e', textDim: 'rgba(255,154,46,0.45)', accent: '#ffb84d', info: '#ffb84d',
     carBody: '#5f6670', carInner: '#22262c', door: 'rgba(180,190,200,0.4)', dim: 'rgba(0,0,0,0.75)', highlightRgb: '255,154,46',
