@@ -23,7 +23,7 @@ At first you tap floors to send the car and try to keep everyone from giving up 
 - Express to the lobby when empty
 - Low zone / High zone
 
-Each building has different traffic - an office with morning and evening rushes, a department store where everyone comes from the lobby, a hotel with two separate crowds - so no single rule set wins everywhere.
+There are 8 buildings with up to 3 elevators and 10 floors. Each has different traffic - an office with morning and evening rushes, a department store where everyone comes from the lobby, a hotel with two separate crowds - and some bring people in a hurry, tour groups or shoppers with luggage that take up more room. No single rule set wins everywhere, and you earn stars to open the next building.
 
 A few details:
 
@@ -32,7 +32,7 @@ A few details:
 - No text in the UI (numbers, colors and icons only), no account, works on desktop and mobile (landscape).
 - Music and sound effects are generated in code.
 
-It's free and still small (4 buildings, 5 cards). I'd love to hear which part was confusing, or your best rule code for each building!
+It's free and still growing (8 buildings, 5 cards). I'd love to hear which part was confusing, or your best rule code for each building!
 
 ---
 
@@ -49,7 +49,7 @@ It's free and still small (4 buildings, 5 cards). I'd love to hear which part wa
 - 空なら急行で1階へ
 - 下層担当・上層担当
 
-建物ごとに人の流れが違うので(朝夕にラッシュがあるオフィス、みんな1階から来るデパート、2つの集団が動くホテル)、どこでも勝てるルールはありません。
+建物は8つで、エレベーターは最大3基・10階建て。建物ごとに人の流れが違い(朝夕にラッシュがあるオフィス、みんな1階から来るデパート、2つの集団が動くホテル)、急いでいる人・団体客・場所を取る荷物持ちが来る建物もあります。どこでも勝てるルールはなく、星を集めると次の建物が開きます。
 
 細かいところ:
 - 自動で動かした日の点数は、20日分を計算した平均です。だから良いルールは、運ではなく本当に高い点になります。
@@ -57,4 +57,4 @@ It's free and still small (4 buildings, 5 cards). I'd love to hear which part wa
 - 画面に文字はなく(数字・色・アイコンだけ)、登録不要、PC とスマホ(横向き)で遊べます。
 - BGM と効果音はコードで作っています。
 
-無料で、まだ小さいゲームです(建物4つ、カード5枚)。分かりにくかったところや、建物ごとの一番良いルールの文字列を教えてもらえるとうれしいです!
+無料で、まだ育てている途中のゲームです(建物8つ、カード5枚)。分かりにくかったところや、建物ごとの一番良いルールの文字列を教えてもらえるとうれしいです!
