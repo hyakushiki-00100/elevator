@@ -64,12 +64,18 @@ function drawBuilding(ctx: CanvasRenderingContext2D, b: Box): void {
   const shaftX = [b.x + b.w - shaftW * 2 - b.w * 0.05, b.x + b.w - shaftW - b.w * 0.03];
   for (let f = 0; f < floors; f++) {
     const y = b.y + (floors - 1 - f) * fh;
-    ctx.fillStyle = f % 2 === 0 ? '#17181c' : '#1c1d22';
+    // ゲームの中のオフィスと同じ紺の壁と天井の明かり(2026-11-25 見た目の手直しに合わせた)
+    ctx.fillStyle = f % 2 === 0 ? '#14243a' : '#182a42';
     ctx.fillRect(b.x, y, b.w, fh - 2);
+    const g = ctx.createLinearGradient(0, y, 0, y + fh * 0.6);
+    g.addColorStop(0, 'rgba(255,240,210,0.12)');
+    g.addColorStop(1, 'rgba(255,240,210,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(b.x, y, b.w, fh * 0.6);
     ctx.fillStyle = floorColor(f);
     ctx.fillRect(b.x, y, b.w * 0.012, fh - 2);
     // オフィスの窓
-    ctx.fillStyle = 'rgba(140,190,255,0.07)';
+    ctx.fillStyle = 'rgba(140,190,255,0.14)';
     for (let x = b.x + b.w * 0.08; x < shaftX[0]! - b.w * 0.12; x += b.w * 0.11) ctx.fillRect(x, y + fh * 0.18, b.w * 0.08, fh * 0.3);
   }
   for (const sx of shaftX) {
@@ -152,7 +158,7 @@ function drawTitle(ctx: CanvasRenderingContext2D, b: Box, kind: CoverKind): void
 }
 
 function drawCards(ctx: CanvasRenderingContext2D, b: Box): void {
-  const cards = ['nearest', 'sameDir', 'express'] as const;
+  const cards = ['sameDir', 'express', 'noBulky'] as const;
   const ch = Math.min(b.h * 0.95, (b.w / 3) * (84 / 64) * 1.15);
   const cw = ch * (64 / 84);
   cards.forEach((c, i) => {
