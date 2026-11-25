@@ -4,7 +4,7 @@ import { STORY_LOOP_MS, storyAt } from './story.ts';
 import { BRANCH_FREEZE, type Branch, type Preview } from '../ui/preview.ts';
 import type { Elevator } from '../sim/elevator.ts';
 import type { Passenger } from '../sim/passenger.ts';
-import type { ScoreResult } from '../sim/score.ts';
+import { PENALTY_PER_MISS, type ScoreResult } from '../sim/score.ts';
 import type { SimState } from '../sim/sim.ts';
 import type { CardId } from '../sim/rules.ts';
 import {
@@ -39,6 +39,8 @@ export interface Effect {
   elevator: number;
   /** 発生時刻(performance.now) */
   t0: number;
+  /** 運んだときに入った点(type が delivered のとき。「+点」を浮かべる) */
+  points?: number;
   /** タップの波紋の位置(論理座標。type が tap のとき) */
   x?: number;
   y?: number;
@@ -734,12 +736,34 @@ function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly
     const y = floorTop(l, ef.floor) + l.floorH / 2 - t * 24;
     const alpha = 1 - t;
     if (ef.type === 'tap') continue;
+    // 点の増減を数字で浮かべる(操作への反応をすぐ返すため。2026-11-25、CrazyGames の品質ガイドライン「反応が早い」)
+    const size = Math.max(14, Math.min(22, l.floorH * 0.28));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${size}px ${T().font}`;
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
     if (ef.type === 'missed') {
       iconCross(ctx, l.queueLeft + 14, y, 11, alpha);
+      ctx.textAlign = 'left';
+      const txt = `-${PENALTY_PER_MISS}`;
+      ctx.strokeText(txt, l.queueLeft + 30, y);
+      ctx.fillStyle = '#ff5a5a';
+      ctx.fillText(txt, l.queueLeft + 30, y);
     } else {
       const sx = l.shaftX[ef.elevator] ?? l.shaftX[0]!;
       iconCheck(ctx, sx - 12, y, 9, alpha);
+      if (ef.points !== undefined) {
+        ctx.textAlign = 'right';
+        const txt = `+${ef.points}`;
+        ctx.strokeText(txt, sx - 26, y);
+        // 点が高い(早く運べた)ほど緑、低いほど黄色
+        ctx.fillStyle = ef.points >= 70 ? '#6fe08a' : ef.points >= 40 ? '#e8e06a' : '#f0a85a';
+        ctx.fillText(txt, sx - 26, y);
+      }
     }
+    ctx.restore();
   }
 }
 
@@ -793,8 +817,18 @@ function drawPanel(
   if (T().glow > 0) { ctx.shadowColor = T().accent; ctx.shadowBlur = T().glow; }
   drawNumber(ctx, String(sc.score), PANEL_X + PANEL_W / 2, 214, 36, T().accent);
   ctx.shadowBlur = 0;
-  for (let i = 0; i < 3; i++) {
-    iconStar(ctx, PANEL_X + PANEL_W / 2 + (i - 1) * 40, 246, 15, sc.score >= th[i]!);
+  // 目標の棒(2026-11-25):点数が棒を伸ばし、星は閾値の位置に置く。届いた星が光る(「次の星まであとどれくらいか」を見せる)
+  {
+    const gx = PANEL_X + 26, gw = PANEL_W - 52, gy = 246;
+    const max = th[2]! * 1.08;
+    const xOf = (v: number): number => gx + Math.min(1, v / max) * gw;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    roundRect(ctx, gx, gy - 4, gw, 8, 4);
+    ctx.fill();
+    ctx.fillStyle = T().accent;
+    roundRect(ctx, gx, gy - 4, Math.max(8, xOf(sc.score) - gx), 8, 4);
+    ctx.fill();
+    for (let i = 0; i < 3; i++) iconStar(ctx, xOf(th[i]!), gy, 13, sc.score >= th[i]!);
   }
 
   // 運行ルールの枠(今動きを決めているカードを枠で示し、切り替わった瞬間に1回だけ光らせる)。

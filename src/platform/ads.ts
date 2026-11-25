@@ -67,6 +67,8 @@ export function crazyGames(sdkOverride?: CrazySdk): Platform {
   let sdk: CrazySdk | null = sdkOverride ?? null;
   let ready = false;
   let playing = false;
+  /** ゲーム側が遊んでいる区間にいるか(SDK の準備が終わる前に始まった場合、準備ができてから知らせるため) */
+  let wantPlaying = false;
   const listeners: (() => void)[] = [];
   const safe = (f: () => void): void => {
     try { f(); } catch { /* SDK の失敗でゲームを止めない */ }
@@ -82,17 +84,21 @@ export function crazyGames(sdkOverride?: CrazySdk): Platform {
         if (!sdk) return;
         await sdk.init();
         ready = true;
+        // 準備の前に遊び始めていたら(開いてすぐ1日目が始まる)、ここで知らせる
+        if (wantPlaying && !playing) { playing = true; safe(() => sdk!.game.gameplayStart()); }
         sdk.game.addSettingsChangeListener?.(() => listeners.forEach((cb) => safe(cb)));
       } catch {
         ready = false;
       }
     },
     gameplayStart() {
+      wantPlaying = true;
       if (!ready || !sdk || playing) return;
       playing = true;
       safe(() => sdk!.game.gameplayStart());
     },
     gameplayStop() {
+      wantPlaying = false;
       if (!ready || !sdk || !playing) return;
       playing = false;
       safe(() => sdk!.game.gameplayStop());

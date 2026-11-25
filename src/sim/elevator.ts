@@ -5,7 +5,8 @@ import { acceptsSize, evaluateRules, hallCalls, makeContext, type CardId } from 
 
 /** 描画の演出用に sim が出す出来事。採点や状態には使わない */
 export type SimEvent =
-  | { type: 'delivered'; floor: number; elevator: number }
+  /** points: この人で入った点(描画の「+点」に使う。sim の結果には影響しない) */
+  | { type: 'delivered'; floor: number; elevator: number; points: number }
   | { type: 'boarded'; floor: number; elevator: number }
   | { type: 'missed'; floor: number };
 
@@ -172,8 +173,9 @@ function serve(e: Elevator, w: World): void {
       p.state = 'arrived';
       p.elevatorId = -1;
       w.stats.delivered++;
-      w.stats.servicePoints += deliveryPoints(p.waitTicks);
-      w.events.push({ type: 'delivered', floor: cur, elevator: e.id });
+      const pts = deliveryPoints(p.waitTicks);
+      w.stats.servicePoints += pts;
+      w.events.push({ type: 'delivered', floor: cur, elevator: e.id, points: pts });
       extra += KIND_BOARD_EXTRA[p.kind];
       changed = true;
     }

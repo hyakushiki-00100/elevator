@@ -39,6 +39,24 @@ describe('広告の窓口', () => {
     expect(platformFor('crazygames').name).toBe('crazygames');
   });
 
+  it('CrazyGames: SDK の準備の前に遊び始めたら、準備ができたときに gameplayStart を知らせる(開いてすぐ1日目が始まるため)', async () => {
+    const { sdk, calls } = fakeSdk('finished');
+    const p = crazyGames(sdk);
+    p.gameplayStart(); // 準備の前
+    expect(calls).not.toContain('start');
+    await p.init();
+    expect(calls.filter((c) => c === 'start')).toHaveLength(1);
+    p.gameplayStart(); // 二重には知らせない
+    expect(calls.filter((c) => c === 'start')).toHaveLength(1);
+    // 準備の前に止めていれば、知らせない
+    const b = fakeSdk('finished');
+    const q = crazyGames(b.sdk);
+    q.gameplayStart();
+    q.gameplayStop();
+    await q.init();
+    expect(b.calls).not.toContain('start');
+  });
+
   it('CrazyGames: 広告が始まったら音を止め、終わったら戻す', async () => {
     const { sdk, calls } = fakeSdk('finished');
     const p = crazyGames(sdk);

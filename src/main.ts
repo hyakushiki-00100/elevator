@@ -327,6 +327,8 @@ function resetProgress(): void {
   tutorial = { taps: 0, placed: false };
   if (saving) resetSave(store, { sfx: sound.sfxLevel, music: sound.musicLevel });
   newDay();
+  // 最初からのやり直しも、開始画面を挟まずにすぐ遊べる状態にする
+  setMode('playing');
 }
 
 function onReadyTap(x: number, y: number): void {
@@ -537,6 +539,16 @@ const MAX_STEPS_PER_FRAME = 5;
 let acc = 0;
 let last = performance.now();
 
+/**
+ * 最初の1人で止めて待つ(2026-11-25、CrazyGames の品質ガイドライン「説明はゲームの中で、絵で」)。
+ * カードを持っていない最初の日に、まだ一度も指示していなければ、最初の人が乗り場に着いたところで時間を止め、
+ * 指の絵(playHint)がその階を指したまま、プレイヤーが階をタップするのを待つ。手動の日なので点数の再現には関係しない。
+ */
+function onboardingHold(): boolean {
+  return unlocked.length === 0 && tutorial.taps === 0 &&
+    state.passengers.some((p) => p.state === 'waiting' && p.spawnTick <= state.tick);
+}
+
 /** 撮影専用: ?cover=landscape|portrait|square なら投稿用の表紙の画像だけを描く(本番ビルドには入らない) */
 const COVER: CoverKind | null = (() => {
   if (!DEBUG_HOOKS) return null;
@@ -574,7 +586,7 @@ function frame(now: number): void {
   }
   acc += Math.min(now - last, 250);
   last = now;
-  if (mode !== 'playing') acc = 0;
+  if (mode !== 'playing' || onboardingHold()) acc = 0;
   let steps = 0;
   while (acc >= DT) {
     prevPos = state.elevators.map((e) => e.pos);
@@ -584,7 +596,7 @@ function frame(now: number): void {
     pending = [];
     for (const ev of state.events) {
       if (ev.type === 'delivered') {
-        effects.push({ type: 'delivered', floor: ev.floor, elevator: ev.elevator, t0: now });
+        effects.push({ type: 'delivered', floor: ev.floor, elevator: ev.elevator, t0: now, points: ev.points });
         sfx('deliver');
       } else if (ev.type === 'missed') {
         effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now });
@@ -671,6 +683,10 @@ if (DEBUG_HOOKS) {
     start() { newDay(); setMode('playing'); },
   };
 }
+
+// 初めて遊ぶ人(カードを持っていない)は、開始画面を出さずにすぐ1日目を始める(2026-11-25、CrazyGames の
+// 品質ガイドライン「開いたらすぐ遊べる」。Full Launch では必須)。カードを持っている人は編集画面から(開始まで1回のタップ)。
+if (unlocked.length === 0) setMode('playing');
 
 // 共有のリンク(?r=EV1-...)で開かれたら、そのルールを読み込む(結果は共有の窓に図で示す)
 {
