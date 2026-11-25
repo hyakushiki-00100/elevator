@@ -11,7 +11,7 @@ import {
 } from './render/layout.ts';
 import { handleTap, type ControlState } from './ui/controls.ts';
 import {
-  compactLayout, dropFromHand, fitLayout, moveSlot, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
+  compactLayout, dropFromHand, fitLayout, moveSlot, nextStarGate, nextUnlock, removeAt, slotCountFor, stagesOpen, type RuleSet, type SlotLayout,
 } from './ui/editor.ts';
 import { crazyGames, noAds } from './platform/ads.ts';
 import { drawCover, type CoverKind } from './render/cover.ts';
@@ -47,6 +47,14 @@ let stageIdx = 0;
 const rulesByStage: SlotLayout[] = STAGES.map((s) => fitLayout([], s.building.elevators, 0, []));
 /** ステージごとの最高の星 */
 const bestStars: number[] = STAGES.map(() => 0);
+/** 星の合計(各ステージの最高の星)。ステージ5以降はこれで開く */
+function totalStars(): number {
+  return bestStars.reduce((a, b) => a + b, 0);
+}
+/** 開いているステージの数(カードの枚数と星の合計で決まる) */
+function openCount(): number {
+  return stagesOpen(unlocked, STAGES, totalStars());
+}
 
 const store = browserStore();
 /** 案内(指の手本)の進み具合: 1日目に手でタップした回数・カードを一度でも置いたか */
@@ -85,7 +93,7 @@ let saving = true;
       if (r) rulesByStage[i] = r.map((row) => [...row]);
     });
     const last = STAGES.findIndex((s) => s.id === saved.lastStage);
-    if (last >= 0 && last < stagesOpen(unlocked, STAGES)) stageIdx = last;
+    if (last >= 0 && last < openCount()) stageIdx = last;
     sound.sfxLevel = isVolumeLevel(saved.sfx) ? saved.sfx : 3;
     sound.musicLevel = isVolumeLevel(saved.music) ? saved.music : 2;
     tutorial = { ...saved.tutorial };
@@ -99,12 +107,14 @@ if (DEBUG_HOOKS) {
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
   devBuilding = { floors: num('floors'), elevators: num('elevators') };
   if (q.get('cards') === 'all') unlocked = [...CARD_ORDER];
+  // 星で開くステージの確認用: ?stars=all で全ステージの最高の星を3にする
+  if (q.get('stars') === 'all') bestStars.fill(3);
   // 見た目のテーマの見本(?theme=dark|light|retro|metal)。見た目の雰囲気が決まるまでの比較用
   const th = q.get('theme');
   if (th) setTheme(th);
   const st = num('stage');
   if (st !== undefined && st >= 1 && st <= STAGES.length) stageIdx = st - 1;
-  if (['cards', 'stage', 'floors', 'elevators'].some((k) => q.has(k))) saving = false;
+  if (['cards', 'stars', 'stage', 'floors', 'elevators'].some((k) => q.has(k))) saving = false;
 }
 
 /** 進行状況を端末内に保存する(失敗しても無視。ゲームは続ける)。lastIdx は次に開いたときのステージ */
@@ -249,11 +259,11 @@ function officialResult(): DayResult {
 /** 1日の終わり: 正式な結果を出し、星を記録し、カードを手に入れる */
 function finishDay(): void {
   dayResult = officialResult();
+  const openBefore = openCount();
   bestStars[stageIdx] = Math.max(bestStars[stageIdx] ?? 0, dayResult.stars);
-  const openBefore = stagesOpen(unlocked, STAGES);
   newCards = nextUnlock(unlocked);
   unlocked = [...unlocked, ...newCards];
-  const openAfter = stagesOpen(unlocked, STAGES);
+  const openAfter = openCount();
   prepareProgress(openAfter > openBefore ? openAfter - 1 : null);
   persist(nextStageIdx);
   setMode('result');
@@ -292,7 +302,7 @@ const RESULT_INPUT_DELAY_MS = 700;
 function importShared(text: string): Feedback {
   const d = decodeShare(text);
   if (!d.ok) { sfx('error'); return 'error'; }
-  const r = applyShared(d.value, STAGES, stagesOpen(unlocked, STAGES), unlocked, slotCountFor(unlocked));
+  const r = applyShared(d.value, STAGES, openCount(), unlocked, slotCountFor(unlocked));
   if (r.status !== 'ok' && r.status !== 'partial') { sfx('error'); return 'error'; }
   sfx('click');
   stageIdx = r.stageIdx;
@@ -352,7 +362,7 @@ function onReadyTap(x: number, y: number): void {
     openShareDialog({ mode: 'import', onSubmit: importShared });
     return;
   }
-  const tab = stageTabHit(x, y, stagesOpen(unlocked, STAGES));
+  const tab = stageTabHit(x, y, openCount());
   if (tab !== null) {
     sfx('click');
     drag = null;
@@ -617,7 +627,7 @@ function frame(now: number): void {
     prevPos, alpha: mode === 'playing' ? acc / DT : 1,
     selected: control.selected, effects, mode, modeSince, now,
     unlocked, slotCount: slotCountFor(unlocked), editRules: currentLayout(), editRow, newCards,
-    stagesOpen: stagesOpen(unlocked, STAGES), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
+    stagesOpen: openCount(), starGate: nextStarGate(unlocked, STAGES, totalStars()), totalStars: totalStars(), stageIdx, bestStars, muted: sound.muted, audioOk: sound.ok,
     sfxLevel: sound.sfxLevel, musicLevel: sound.musicLevel, volumeOpen,
     drag: drag && drag.moved ? { card: drag.card, x: drag.x, y: drag.y, from: drag.from, target: dropTarget(drag) } : null,
     previewCard: drag?.card ?? previewCard, simPreview: mode === 'ready' && unlocked.length > 0 ? simPreview : null, editorHint: mode === 'ready' ? editorHint() : null,

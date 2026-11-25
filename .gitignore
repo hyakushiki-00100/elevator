@@ -26,3 +26,4 @@ dist-ssr
 # 自動確認の出力(スクリーンショット・balance.csv)
 out
 dist-crazygames
+tools/tmp/

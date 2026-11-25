@@ -5,7 +5,7 @@ import {
   EDITOR_PANEL, EDITOR_PLAY, EDITOR_PREVIEW, editorHit, handRect, inRect, rowButtonRect, SHARE_EXPORT_BUTTON, SHARE_IMPORT_BUTTON, RESET_BUTTON, RESET_NO, RESET_PANEL, RESET_YES,
   shareButtonHit, slotRect, stageTabHit, stageTabRect,
 } from '../src/render/layout.ts';
-import { fitRules, nextUnlock, placeCard, placeCardAt, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
+import { fitRules, nextStarGate, nextUnlock, placeCard, placeCardAt, removeCard, slotCountFor, stagesOpen, UNLOCK_STEPS } from '../src/ui/editor.ts';
 
 describe('カードの編集(純粋な関数)', () => {
   it('持ち上げたカードを置く: 指定の枠に差し込む。同じ行にあれば移す。枠が埋まっていれば新しいカードは置かない', () => {
@@ -68,6 +68,16 @@ describe('カードの編集(純粋な関数)', () => {
     expect(stagesOpen(['nearest', 'sameDir'], STAGES)).toBe(2);
     expect(stagesOpen(['nearest', 'sameDir', 'express'], STAGES)).toBe(3);
     expect(stagesOpen([...CARD_ORDER], STAGES)).toBe(4);
+    // ステージ5以降は星の合計で開く(手前が閉じていれば、その先も閉じたまま)
+    expect(stagesOpen([...CARD_ORDER], STAGES, 5)).toBe(4);
+    expect(stagesOpen([...CARD_ORDER], STAGES, 6)).toBe(5);
+    expect(stagesOpen([...CARD_ORDER], STAGES, 9)).toBe(6);
+    expect(stagesOpen([...CARD_ORDER], STAGES, 12)).toBe(7);
+    expect(stagesOpen(['nearest'], STAGES, 99)).toBe(1); // 星があってもカードが足りなければ開かない
+    expect(nextStarGate([...CARD_ORDER], STAGES, 0)).toBe(6);
+    expect(nextStarGate([...CARD_ORDER], STAGES, 6)).toBe(9);
+    expect(nextStarGate(['nearest'], STAGES, 0)).toBeNull(); // 次はカードで開く
+    expect(nextStarGate([...CARD_ORDER], STAGES, 99)).toBeNull(); // 全部開いている
     // 開く順に並んでいる
     for (let i = 1; i < STAGES.length; i++) expect(STAGES[i]!.opensAt).toBeGreaterThanOrEqual(STAGES[i - 1]!.opensAt);
   });

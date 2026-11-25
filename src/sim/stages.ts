@@ -14,6 +14,8 @@ export interface Stage {
   stars: [number, number, number];
   /** 持っているカードがこの枚数以上になると開く(配列は opensAt の小さい順に並べる) */
   opensAt: number;
+  /** 星の合計(各ステージの最高の星を足したもの)がこの数以上になると開く(2026-11-25 ユーザー決定、ステージ5以降) */
+  starsNeeded?: number;
   /**
    * 建物の見た目(描画だけに使う。sim には関係しない)。人の流れの特徴と合わせ、文字なしでステージの性格を伝える
    * (2026-11-21):plain=小さなビル / office=オフィス(朝夕のラッシュ)/ department=デパート(1日中、1階から上へ)/ hotel=ホテル(上の階どうし・下の階どうし)
@@ -121,5 +123,71 @@ export const STAGES: readonly Stage[] = [
     stars: [5000, 9300, 11200],
     opensAt: 5,
     look: 'hotel',
+  },
+  // ---- ステージ5〜7(2026-11-25 追加、ユーザー決定「新ステージ+特別な乗客」「星の合計で開く」)----
+  // 急ぎ(我慢8秒)・団体(定員3人分)・荷物持ち(定員2人分)が出る。今の5枚のカードには特別な乗客に反応するものがないので、
+  // 組み合わせの差は小さい(条件を探した結果: 1〜3%で、1位がシード群ごとに入れ替わることが多い)。
+  {
+    id: 5,
+    seed: 1007,
+    // 7階・2基のオフィス。朝夕のラッシュに、急ぎの人(我慢が半分)が4人に1人まじる
+    building: makeBuilding({ floors: 7, elevators: 2, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.008, rateEnd: 0.026, fromGround: 0.8, rushedShare: 0.25 }),
+        makePhase({ ticks: MIN, rate: 0.012, rateEnd: 0.016, fromGround: 0.1, toGround: 0.1, rushedShare: 0.25 }),
+        makePhase({ ticks: MIN, rate: 0.018, rateEnd: 0.028, toGround: 0.75, rushedShare: 0.25 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 20日平均(seed 1007、2026-11-25): 手動相当 上級者 6525 / 初心者 5372
+    //   カード 両方[近い] 7204 / 全組み合わせ(1035通り)の1位 ゾーン+[近い…] 7273 / 両方[急行,近い] 6737
+    // 3★: ステージ2と同じく「2基をきちんと自動化すれば取れる」(差が小さく、決まった考え方の差にならないため)
+    stars: [2700, 5300, 7000],
+    opensAt: 5,
+    starsNeeded: 6,
+    look: 'office',
+  },
+  {
+    id: 6,
+    seed: 1015,
+    // 7階・1基・定員8のホテル。5組に1組が団体(定員を3人分使う)。朝は1階から上へ、夕方は上から1階へ
+    building: makeBuilding({ floors: 7, elevators: 1, capacity: 8, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.007, rateEnd: 0.010, fromGround: 0.6, groupShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.008, rateEnd: 0.011, groupShare: 0.2 }),
+        makePhase({ ticks: MIN, rate: 0.009, rateEnd: 0.012, toGround: 0.6, groupShare: 0.2 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 20日平均(seed 1015、2026-11-25): 手動相当 上級者 2939 / 初心者 1860
+    //   カード [同方向,近い] 3140(全45通りの1位) / [同方向,近い,急行] 3109 / [近い] 3034 / [急行,近い] 2905
+    // 3★: 「同じ方向を優先」を「近い呼び出しへ」の上に置く考え方が必要(団体が乗ると定員が早く埋まるので、通り道で拾う効果が大きい、と推測)
+    stars: [950, 1850, 3100],
+    opensAt: 5,
+    starsNeeded: 9,
+    look: 'hotel',
+  },
+  {
+    id: 7,
+    seed: 1009,
+    // 9階・2基のデパート。10人に3人が荷物持ち(定員を2人分使う)。朝は1階から上へ、夕方は上から1階へ
+    building: makeBuilding({ floors: 9, elevators: 2, capacity: 6, speed: 30 }),
+    traffic: {
+      phases: [
+        makePhase({ ticks: MIN, rate: 0.010, rateEnd: 0.024, fromGround: 0.8, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.010, rateEnd: 0.014, luggageShare: 0.3 }),
+        makePhase({ ticks: MIN, rate: 0.016, rateEnd: 0.026, toGround: 0.75, luggageShare: 0.3 }),
+      ],
+      overtimeTicks: 600,
+    },
+    // 20日平均(seed 1009、2026-11-25): 手動相当 上級者 4703 / 初心者 3569
+    //   カード(全1035通り+左右入れ替え) [近い]/[急行,近い] 5230・[下層,近い]/[近い] 5231 / 両方[近い] 5153 / ゾーン+[近い] 5076
+    // 3★: 「1基だけに役割を持たせる」(片方を急行か下層担当にし、もう片方は近い呼び出し)考え方が必要。差は約1.5%と小さい
+    stars: [1800, 3500, 5200],
+    opensAt: 5,
+    starsNeeded: 12,
+    look: 'department',
   },
 ];

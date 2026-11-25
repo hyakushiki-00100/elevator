@@ -62,11 +62,28 @@ export function nextUnlock(unlocked: readonly CardId[], steps: readonly (readonl
   return [];
 }
 
-/** 開いているステージの数(ステージは opensAt の小さい順に並んでいる前提) */
-export function stagesOpen(unlocked: readonly CardId[], stages: readonly { opensAt: number }[]): number {
+/**
+ * 開いているステージの数。ステージは並び順に開く(手前が閉じていれば、その先も閉じたまま)。
+ * 開く条件: 持っているカードが opensAt 枚以上、かつ星の合計が starsNeeded 以上(2026-11-25、ステージ5以降)。
+ */
+export function stagesOpen(
+  unlocked: readonly CardId[], stages: readonly { opensAt: number; starsNeeded?: number }[], totalStars = 0,
+): number {
   let n = 0;
-  for (const s of stages) if (s.opensAt <= unlocked.length) n++;
+  for (const s of stages) {
+    if (s.opensAt > unlocked.length || (s.starsNeeded ?? 0) > totalStars) break;
+    n++;
+  }
   return Math.max(1, n);
+}
+
+/** 次に開くステージに必要な星の合計(カードの枚数で開くもの・もう全部開いているときは null) */
+export function nextStarGate(
+  unlocked: readonly CardId[], stages: readonly { opensAt: number; starsNeeded?: number }[], totalStars = 0,
+): number | null {
+  const next = stages[stagesOpen(unlocked, stages, totalStars)];
+  if (!next || !next.starsNeeded || next.opensAt > unlocked.length) return null;
+  return next.starsNeeded;
 }
 
 export function slotCountFor(unlocked: readonly CardId[]): number {

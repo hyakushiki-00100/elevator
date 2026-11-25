@@ -120,4 +120,27 @@ describe('ステージごとに3★に必要な「考え方」(較正の前提)'
     expect(plain.stars).toBeLessThan(3);
     expect(zone.score / plain.score).toBeGreaterThan(1.08);
   });
+
+  it('ステージ5(急ぎがまじるオフィス): 2基をきちんと自動化すれば3★。手動の上級者は届かない', () => {
+    const st = STAGES[4]!;
+    expect(rateRules(st, both(['nearest'])).stars).toBe(3);
+    expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBe(3);
+  });
+
+  it('ステージ6(団体のホテル): 「同じ方向を優先」を「近い」の上に置くと3★。逆順や1枚だけでは届かない', () => {
+    const st = STAGES[5]!;
+    expect(rateRules(st, [['sameDir', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['nearest', 'sameDir']]).stars).toBe(2);
+    expect(rateRules(st, [['nearest']]).stars).toBe(2);
+    expect(rateRules(st, [['express', 'nearest']]).stars).toBeLessThan(3);
+  });
+
+  it('ステージ7(荷物のデパート): 1基だけに役割(急行か下層担当)を持たせると3★。両方同じでは届かない', () => {
+    const st = STAGES[6]!;
+    expect(rateRules(st, [['nearest'], ['express', 'nearest']]).stars).toBe(3);
+    expect(rateRules(st, [['zoneLow', 'nearest'], ['nearest']]).stars).toBe(3);
+    expect(rateRules(st, both(['nearest'])).stars).toBeLessThan(3);
+    expect(rateRules(st, both(['express', 'nearest'])).stars).toBeLessThan(3);
+    expect(rateRules(st, [['zoneLow', 'nearest'], ['zoneHigh', 'nearest']]).stars).toBeLessThan(3);
+  });
 });
