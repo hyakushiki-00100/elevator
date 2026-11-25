@@ -34,7 +34,9 @@ export const elevatorColor = (i: number): string => ELEVATOR_COLORS[i % ELEVATOR
 
 /** 演出(sim の出来事やタップから作る。sim には影響しない) */
 export interface Effect {
-  type: 'delivered' | 'missed' | 'tap';
+  type: 'delivered' | 'missed' | 'tap' | 'board' | 'alight';
+  /** 乗り込む・降りる人の行き先(色に使う。type が board / alight のとき) */
+  dest?: number;
   floor: number;
   elevator: number;
   /** 発生時刻(performance.now) */
@@ -152,6 +154,7 @@ export function draw(a: DrawArgs): void {
   // 2基以上: 選んでいるエレベーターの通り道(シャフト)を、そのエレベーターの色で縦いっぱいに光らせる
   if (multi && a.selected !== null && a.mode === 'playing') drawSelectedShaft(ctx, l, a.selected, a.now);
   drawQueuesWalking(ctx, l, s, a.now);
+  pruneQueueX();
   s.elevators.forEach((e, i) => {
     const prev = a.prevPos[i] ?? e.pos;
     const pos = prev + (e.pos - prev) * a.alpha;
@@ -382,6 +385,7 @@ const SLOT_WIDTH = { normal: 1, rushed: 1, group: 2.2, luggage: 1.6 } as const;
  */
 function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState, now: number): void {
   const W = WALK_TICKS;
+  seenQueue.clear();
   const byFloor: Passenger[][] = Array.from({ length: l.floors }, () => []);
   for (const p of s.passengers) if (p.state === 'waiting') byFloor[p.origin]!.push(p);
   const doorX = 12;
@@ -423,13 +427,26 @@ function drawQueuesWalking(ctx: CanvasRenderingContext2D, l: Layout, s: SimState
       const slotX = x + w / 2;
       const t = progress(p);
       const startX = doorX + doorW / 2;
-      const px = startX + (slotX - startX) * t;
+      const target = startX + (slotX - startX) * t;
+      // 前の人が乗ると、後ろの人はすっと詰める(一瞬で飛ばない。2026-11-25 見た目の手直し)
+      const prevX = queueX.get(p.id);
+      const px = t < 1 || prevX === undefined ? target : prevX + (target - prevX) * 0.22;
+      queueX.set(p.id, px);
+      seenQueue.add(p.id);
       const walking = t < 1;
       const arrived = s.tick - p.spawnTick;
       const remain = Math.max(0, 1 - Math.max(0, arrived) / p.patience);
       drawPerson(ctx, p, px, baseY, unit, walking ? 1 : remain, maxR, walking ? now : null);
     }
   }
+}
+
+/** 行列の人の表示位置(描画だけの記録。前が空くと後ろの人がすっと詰める) */
+const queueX = new Map<number, number>();
+const seenQueue = new Set<number>();
+/** 行列からいなくなった人の記録を捨てる(draw の終わりに呼ぶ) */
+function pruneQueueX(): void {
+  for (const id of queueX.keys()) if (!seenQueue.has(id)) queueX.delete(id);
 }
 
 /** 人の形(頭と胴)。行き先の色。種類: 急ぎ=前かがみ+線 / 団体=3人 / 荷物持ち=かばん。足元の棒が我慢の残り */
@@ -515,7 +532,8 @@ function drawElevator(
   now = 0, invite = false, look: DrawArgs['look'] = 'plain',
 ): void {
   const x = l.shaftX[e.id]!;
-  const y = carTop(l, pos);
+  // 止まった瞬間に少し沈んで戻る(重さを感じさせる)
+  const y = carTop(l, pos) + carBounce(e, now);
   const h = carHeight(l);
   const w = l.shaftW;
 
@@ -729,6 +747,42 @@ function drawTapRipples(ctx: CanvasRenderingContext2D, effects: readonly Effect[
   }
 }
 
+/** 乗り込む・降りる人の短い動き(描画だけ。2026-11-25 見た目の手直し「人が一瞬で消えたり現れたりしない」) */
+const WALKER_MS = 380;
+function drawWalker(ctx: CanvasRenderingContext2D, l: Layout, ef: Effect, now: number): void {
+  const t = (now - ef.t0) / WALKER_MS;
+  if (t < 0 || t > 1) return;
+  const sx = l.shaftX[ef.elevator] ?? l.shaftX[0]!;
+  const carIn = sx + l.shaftW / 2;
+  const front = l.queueRight - l.floorH * 0.2;
+  const ease = t * t * (3 - 2 * t);
+  // 乗る: 行列の先頭からかごの中へ / 降りる: かごの中から行列の外へ(左へ歩いて消える)
+  const x = ef.type === 'board' ? front + (carIn - front) * ease : carIn + (front - 40 - carIn) * ease;
+  const alpha = ef.type === 'board' ? (t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3) : (t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7);
+  const foot = floorTop(l, ef.floor) + l.floorH - 6;
+  const r = Math.max(4, Math.min(l.floorH * 0.12, 9));
+  const bob = Math.abs(Math.sin(t * Math.PI * 3)) * 2;
+  const color = floorColor(ef.dest ?? ef.floor);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, alpha);
+  ctx.fillStyle = color;
+  roundRect(ctx, x - r * 0.7, foot - r * 1.6 - bob, r * 1.4, r * 1.6, r * 0.45);
+  ctx.fill();
+  fillCircle(ctx, x, foot - r * 1.6 - r * 0.75 - bob, r * 0.62, color);
+  ctx.restore();
+}
+
+/** かごが止まったときの小さな揺れ(描画だけの記録。扉が開いた瞬間を覚えておく) */
+const arrivedAt: number[] = [];
+const lastPhase: string[] = [];
+const BOUNCE_MS = 260;
+function carBounce(e: Elevator, now: number): number {
+  if (e.phase === 'open' && lastPhase[e.id] !== 'open') arrivedAt[e.id] = now;
+  lastPhase[e.id] = e.phase;
+  const t = (now - (arrivedAt[e.id] ?? -Infinity)) / BOUNCE_MS;
+  return t >= 0 && t < 1 ? Math.sin(t * Math.PI * 2) * 3 * (1 - t) : 0;
+}
+
 function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly Effect[], now: number): void {
   for (const ef of effects) {
     const t = (now - ef.t0) / EFFECT_MS;
@@ -736,6 +790,7 @@ function drawEffects(ctx: CanvasRenderingContext2D, l: Layout, effects: readonly
     const y = floorTop(l, ef.floor) + l.floorH / 2 - t * 24;
     const alpha = 1 - t;
     if (ef.type === 'tap') continue;
+    if (ef.type === 'board' || ef.type === 'alight') { drawWalker(ctx, l, ef, now); continue; }
     // 点の増減を数字で浮かべる(操作への反応をすぐ返すため。2026-11-25、CrazyGames の品質ガイドライン「反応が早い」)
     const size = Math.max(14, Math.min(22, l.floorH * 0.28));
     ctx.save();

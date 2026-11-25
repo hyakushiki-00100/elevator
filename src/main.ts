@@ -597,11 +597,13 @@ function frame(now: number): void {
     for (const ev of state.events) {
       if (ev.type === 'delivered') {
         effects.push({ type: 'delivered', floor: ev.floor, elevator: ev.elevator, t0: now, points: ev.points });
+        effects.push({ type: 'alight', floor: ev.floor, elevator: ev.elevator, t0: now, dest: ev.dest });
         sfx('deliver');
       } else if (ev.type === 'missed') {
         effects.push({ type: 'missed', floor: ev.floor, elevator: -1, t0: now });
         sfx('miss');
       } else if (ev.type === 'boarded') {
+        effects.push({ type: 'board', floor: ev.floor, elevator: ev.elevator, t0: now, dest: ev.dest });
         sfx('board');
       }
     }

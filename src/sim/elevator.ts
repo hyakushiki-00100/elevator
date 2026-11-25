@@ -6,8 +6,9 @@ import { acceptsSize, evaluateRules, hallCalls, makeContext, type CardId } from 
 /** 描画の演出用に sim が出す出来事。採点や状態には使わない */
 export type SimEvent =
   /** points: この人で入った点(描画の「+点」に使う。sim の結果には影響しない) */
-  | { type: 'delivered'; floor: number; elevator: number; points: number }
-  | { type: 'boarded'; floor: number; elevator: number }
+  | { type: 'delivered'; floor: number; elevator: number; points: number; dest: number }
+  /** dest: 乗った人の行き先(描画の「乗り込む人」の色に使う。sim の結果には影響しない) */
+  | { type: 'boarded'; floor: number; elevator: number; dest: number }
   | { type: 'missed'; floor: number };
 
 export type Phase = 'idle' | 'moving' | 'open';
@@ -175,7 +176,7 @@ function serve(e: Elevator, w: World): void {
       w.stats.delivered++;
       const pts = deliveryPoints(p.waitTicks);
       w.stats.servicePoints += pts;
-      w.events.push({ type: 'delivered', floor: cur, elevator: e.id, points: pts });
+      w.events.push({ type: 'delivered', floor: cur, elevator: e.id, points: pts, dest: p.dest });
       extra += KIND_BOARD_EXTRA[p.kind];
       changed = true;
     }
@@ -194,7 +195,7 @@ function serve(e: Elevator, w: World): void {
       // 待ち時間は「このtickの終わり時点」で数える(sim.ts の我慢の限界の判定と同じ定義)
       p.waitTicks = w.tick + 1 - p.spawnTick;
       w.stats.totalWait += p.waitTicks;
-      w.events.push({ type: 'boarded', floor: cur, elevator: e.id });
+      w.events.push({ type: 'boarded', floor: cur, elevator: e.id, dest: p.dest });
       extra += KIND_BOARD_EXTRA[p.kind];
       changed = true;
     }
