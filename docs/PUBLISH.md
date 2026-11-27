@@ -85,7 +85,7 @@ At first you tap floors to send the car. As the building gets busier, you collec
 Earn stars to open new buildings. Score is the average of 20 simulated days, so the best rules really are the best. Share your rule code and anyone can reproduce your score.
 No text, no account — just numbers, colors and icons.
 
-**Controls:** Mouse or touch. Tap a floor to send the elevator (with two elevators, tap the elevator first). Drag cards into the slots before the day starts.
+**Controls:** Mouse or touch. Tap a floor to send the elevator (with two or more elevators, tap an elevator first). Drag cards into the slots before the day starts.
 
 ### 日本語(itch.io などに添える)
 乗客が歩いてやって来て、各階に行列ができていく。最初は階をタップしてエレベーターを動かすけれど、すぐに手が回らなくなる。
