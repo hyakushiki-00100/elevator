@@ -23,6 +23,8 @@ const sample: SaveData = {
   sfx: 0,
   music: 0,
   tutorial: { taps: 3, placed: true },
+  lastScore: { 1: 6704, 2: 5210 },
+  bestScore: { 1: 7120, 2: 5210 },
 };
 
 describe('進行状況の保存', () => {
@@ -31,6 +33,19 @@ describe('進行状況の保存', () => {
     expect(writeSave(st, sample)).toBe(true);
     expect(st.data.has(SAVE_KEY)).toBe(true);
     expect(loadSave(st)).toEqual(sample);
+  });
+
+  it('前回の点・自己ベスト(後から足した項目): ない古いデータは空、壊れた値は捨てる', () => {
+    const st = new MemoryStore();
+    const { lastScore: _l, bestScore: _b, ...old } = sample;
+    st.setItem(SAVE_KEY, JSON.stringify(old));
+    const a = loadSave(st)!;
+    expect(a.lastScore).toEqual({});
+    expect(a.bestScore).toEqual({});
+    st.setItem(SAVE_KEY, JSON.stringify({ ...sample, lastScore: { 1: 100, 2: -5, x: 3, 3: 1.5 }, bestScore: 'x' }));
+    const b = loadSave(st)!;
+    expect(b.lastScore).toEqual({ 1: 100 });
+    expect(b.bestScore).toEqual({});
   });
 
   it('保存がなければ null', () => {

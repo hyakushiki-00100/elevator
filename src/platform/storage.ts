@@ -26,10 +26,16 @@ export interface SaveData {
   music: number;
   /** 案内(指の手本)の進み具合(後から足した項目。ないときは最初から) */
   tutorial: { taps: number; placed: boolean };
+  /**
+   * ステージの id → 前回の点・自己ベストの点(2026-11-27 追加。結果画面で「前回との差」「自己ベスト更新」を見せるため)。
+   * 後から足した項目で、ない古いデータは空(版は上げていない)
+   */
+  lastScore: Record<number, number>;
+  bestScore: Record<number, number>;
 }
 
 export function emptySave(): SaveData {
-  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false, sfx: 3, music: 2, tutorial: { taps: 0, placed: false } };
+  return { version: SAVE_VERSION, unlocked: [], bestStars: {}, rules: {}, lastStage: 1, muted: false, sfx: 3, music: 2, tutorial: { taps: 0, placed: false }, lastScore: {}, bestScore: {} };
 }
 
 /** localStorage と同じ形の最小限の窓口(テストでは偽物を渡す) */
@@ -63,6 +69,13 @@ export function parseSave(text: string | null): SaveData | null {
   if (isObj(raw['bestStars'])) {
     for (const [k, v] of Object.entries(raw['bestStars'])) {
       if (isStageId(k) && typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 3) out.bestStars[Number(k)] = v;
+    }
+  }
+  for (const key of ['lastScore', 'bestScore'] as const) {
+    const m = raw[key];
+    if (!isObj(m)) continue;
+    for (const [k, v] of Object.entries(m)) {
+      if (isStageId(k) && typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 10_000_000) out[key][Number(k)] = v;
     }
   }
   if (isObj(raw['rules'])) {

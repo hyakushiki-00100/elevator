@@ -47,6 +47,9 @@ let stageIdx = 0;
 const rulesByStage: SlotLayout[] = STAGES.map((s) => fitLayout([], s.building.elevators, 0, []));
 /** ステージごとの最高の星 */
 const bestStars: number[] = STAGES.map(() => 0);
+/** ステージごとの前回の点・自己ベストの点(まだ遊んでいなければ null) */
+const lastScore: (number | null)[] = STAGES.map(() => null);
+const bestScore: (number | null)[] = STAGES.map(() => null);
 /** 星の合計(各ステージの最高の星)。ステージ5以降はこれで開く */
 function totalStars(): number {
   return bestStars.reduce((a, b) => a + b, 0);
@@ -89,6 +92,8 @@ let saving = true;
     unlocked = saved.unlocked;
     STAGES.forEach((s, i) => {
       bestStars[i] = saved.bestStars[s.id] ?? 0;
+      lastScore[i] = saved.lastScore[s.id] ?? null;
+      bestScore[i] = saved.bestScore[s.id] ?? null;
       const r = saved.rules[s.id];
       if (r) rulesByStage[i] = r.map((row) => [...row]);
     });
@@ -123,10 +128,13 @@ function persist(lastIdx: number = stageIdx): void {
   const data: SaveData = {
     version: SAVE_VERSION, unlocked: [...unlocked], bestStars: {}, rules: {}, lastStage: STAGES[lastIdx]!.id, muted: sound.muted,
     sfx: sound.sfxLevel, music: sound.musicLevel,
-    tutorial: { ...tutorial },
+    tutorial: { ...tutorial }, lastScore: {}, bestScore: {},
   };
   STAGES.forEach((s, i) => {
     data.bestStars[s.id] = bestStars[i] ?? 0;
+    const ls = lastScore[i], bs = bestScore[i];
+    if (ls !== null && ls !== undefined) data.lastScore[s.id] = ls;
+    if (bs !== null && bs !== undefined) data.bestScore[s.id] = bs;
     data.rules[s.id] = (rulesByStage[i] ?? []).map((row) => [...row]);
   });
   writeSave(store, data);
@@ -248,17 +256,26 @@ function officialResult(): DayResult {
   const rules = currentRules();
   const hasCards = rules.some((r) => r.length > 0);
   if (!hasCards || state.manualUsed) {
-    return { score: day.score, stars: day.stars, basis: 'manual', days: 1, dayScore: day.score };
+    return { score: day.score, stars: day.stars, basis: 'manual', days: 1, dayScore: day.score, prevScore: null, newBest: false };
   }
   const t0 = performance.now();
   const rating = rateRules(st, rules);
   if (import.meta.env.DEV) console.info(`rating: ${RATING_DAYS}日分 ${(performance.now() - t0).toFixed(0)}ms`);
-  return { score: rating.score, stars: rating.stars, basis: 'rated', days: RATING_DAYS, dayScore: day.score };
+  return { score: rating.score, stars: rating.stars, basis: 'rated', days: RATING_DAYS, dayScore: day.score, prevScore: null, newBest: false };
 }
 
 /** 1日の終わり: 正式な結果を出し、星を記録し、カードを手に入れる */
 function finishDay(): void {
   dayResult = officialResult();
+  // 前回の点との差と、自己ベストの更新(カードを変えた効果が数字で分かるように。2026-11-27)
+  {
+    const prev = lastScore[stageIdx] ?? null;
+    const best = bestScore[stageIdx] ?? null;
+    dayResult.prevScore = prev;
+    dayResult.newBest = best !== null && dayResult.score > best;
+    lastScore[stageIdx] = dayResult.score;
+    bestScore[stageIdx] = Math.max(best ?? 0, dayResult.score);
+  }
   const openBefore = openCount();
   bestStars[stageIdx] = Math.max(bestStars[stageIdx] ?? 0, dayResult.stars);
   newCards = nextUnlock(unlocked);
@@ -318,6 +335,8 @@ function resetProgress(): void {
   unlocked = [];
   STAGES.forEach((st, i) => {
     bestStars[i] = 0;
+    lastScore[i] = null;
+    bestScore[i] = null;
     rulesByStage[i] = fitLayout([], st.building.elevators, 0, []);
   });
   stageIdx = 0;

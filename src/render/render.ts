@@ -61,6 +61,10 @@ export interface DayResult {
   days: number;
   /** 画面で見た日の点 */
   dayScore: number;
+  /** このステージの前回の点(初めてなら null)。結果画面で前回との差を見せる(2026-11-27) */
+  prevScore: number | null;
+  /** 自己ベストを更新したか(前に遊んだことがあり、それより高いとき) */
+  newBest: boolean;
 }
 
 export interface DrawArgs {
@@ -1568,6 +1572,44 @@ function drawResult(
   const count = Math.max(0, Math.min(1, (sinceMs - 150) / 900));
   const shown = Math.round(res.score * (1 - (1 - count) * (1 - count) * (1 - count)));
   drawNumber(ctx, String(shown), cx, p.y + 170, 52, T().accent);
+  // 前回のこのステージの点との差(上向き三角=上がった・緑 / 下向き=下がった・赤 / 横棒=同じ)。
+  // カードを変えた効果が数字で分かるように(2026-11-27、ユーザー決定「1」)。点が数え上がった後に出す
+  if (res.prevScore !== null && count >= 1) {
+    const d = res.score - res.prevScore;
+    const pct = res.prevScore > 0 ? (d / res.prevScore) * 100 : 0;
+    const col = d > 0 ? '#6fe08a' : d < 0 ? '#ff6b6b' : T().textDim;
+    const txt = d === 0 ? '0' : `${d > 0 ? '+' : '-'}${Math.abs(d)}  (${d > 0 ? '+' : '-'}${Math.abs(pct).toFixed(1)}%)`;
+    const y0 = p.y + 202;
+    ctx.save();
+    ctx.font = `bold 19px ${T().font}`;
+    const tw = ctx.measureText(txt).width;
+    const x0 = cx - (tw + 22) / 2;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    if (d > 0) { ctx.moveTo(x0 + 7, y0 - 8); ctx.lineTo(x0 + 14, y0 + 4); ctx.lineTo(x0, y0 + 4); }
+    else if (d < 0) { ctx.moveTo(x0 + 7, y0 + 6); ctx.lineTo(x0 + 14, y0 - 6); ctx.lineTo(x0, y0 - 6); }
+    else { ctx.rect(x0, y0 - 2, 14, 4); }
+    ctx.closePath();
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x0 + 22, y0);
+    ctx.restore();
+  }
+  // 自己ベスト更新: 点の右上に光る王冠
+  if (res.newBest && count >= 1) {
+    const kx = cx + 120, ky = p.y + 118;
+    ctx.save();
+    ctx.shadowColor = '#ffd34d';
+    ctx.shadowBlur = 10 + 6 * Math.sin(sinceMs / 180);
+    ctx.fillStyle = '#ffd34d';
+    ctx.beginPath();
+    ctx.moveTo(kx - 16, ky + 8); ctx.lineTo(kx - 16, ky - 8); ctx.lineTo(kx - 8, ky); ctx.lineTo(kx, ky - 12);
+    ctx.lineTo(kx + 8, ky); ctx.lineTo(kx + 16, ky - 8); ctx.lineTo(kx + 16, ky + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
   if (res.basis === 'rated') {
     iconCalendar(ctx, cx - 125, p.y + 152, 20, res.days);
     // 右に、画面で見た日の点(カレンダー「1」)
@@ -1577,7 +1619,7 @@ function drawResult(
     iconFinger(ctx, cx - 125, p.y + 152, 22);
   }
 
-  const y = p.y + 225;
+  const y = p.y + 240;
   const cols = [cx - 140, cx, cx + 140];
   iconCheck(ctx, cols[0]! - 30, y, 14);
   drawNumber(ctx, String(sc.delivered), cols[0]! + 4, y + 9, 26, T().text, 'left');
